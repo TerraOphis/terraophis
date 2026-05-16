@@ -50,12 +50,10 @@ productForm.addEventListener('submit', async (e) => {
 
     try {
         btn.disabled = true;
-        // On n'affiche le message d'upload que si de nouveaux fichiers sont détectés
         statusMsg.textContent = files.length > 0 ? "Téléchargement des images vers R2... ⏳" : "Enregistrement en cours...";
 
         let photoUrls = [];
 
-        // Upload conditionnel (utile en mode édition si on ne change pas les photos)
         if (files.length > 0) {
             const uploadData = new FormData();
             for (let i = 0; i < files.length; i++) { uploadData.append('photos', files[i]); }
@@ -72,17 +70,20 @@ productForm.addEventListener('submit', async (e) => {
             photoUrls = uploadedFiles.map(f => f.url);
         }
 
+        // NOUVEAU : Prise en compte des nouveaux champs de prix et guide
         const productData = {
             name: formData.get('name'),
             latinName: formData.get('latinName'),
-            price: parseFloat(formData.get('price')),
+            price: parseFloat(formData.get('price')) || null,
+            price5: parseFloat(formData.get('price5')) || null,
+            price10: parseFloat(formData.get('price10')) || null,
             stock: parseInt(formData.get('stock')),
             category: formData.get('category'),
             difficulty: formData.get('difficulty'),
             description: formData.get('description'),
+            careGuide: formData.get('careGuide') || ''
         };
 
-        // Branchement de la logique Mise à jour VS Création
         if (editProductId) {
             if (photoUrls.length > 0) {
                 productData.photos = photoUrls;
@@ -90,7 +91,6 @@ productForm.addEventListener('submit', async (e) => {
             await updateDoc(doc(db, "products", editProductId), productData);
             statusMsg.textContent = "✅ Produit mis à jour !";
             
-            // Réinitialisation de l'état
             editProductId = null;
             btn.textContent = "PUBLIER LE PRODUIT";
             document.getElementById('productFiles').required = true;
@@ -112,6 +112,37 @@ productForm.addEventListener('submit', async (e) => {
         btn.disabled = false;
     }
 });
+
+window.editProduct = async (id) => {
+    try {
+        const docRef = doc(db, "products", id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const p = docSnap.data();
+            
+            productForm.elements['name'].value = p.name || '';
+            productForm.elements['latinName'].value = p.latinName || '';
+            productForm.elements['price'].value = p.price || '';
+            productForm.elements['price5'].value = p.price5 || '';
+            productForm.elements['price10'].value = p.price10 || '';
+            productForm.elements['stock'].value = p.stock || '';
+            productForm.elements['category'].value = p.category || '';
+            productForm.elements['difficulty'].value = p.difficulty || '';
+            productForm.elements['description'].value = p.description || '';
+            productForm.elements['careGuide'].value = p.careGuide || '';
+            
+            editProductId = id;
+            document.getElementById('btnSubmit').textContent = "METTRE À JOUR LE PRODUIT";
+            document.getElementById('productFiles').required = false; 
+            
+            window.scrollTo(0, 0);
+        }
+    } catch (error) {
+        console.error("Erreur de chargement :", error);
+        alert("Impossible de charger le produit.");
+    }
+};
 
 // 3. Charger l'inventaire pour pouvoir supprimer/gérer
 async function loadInventory() {
@@ -142,36 +173,6 @@ async function loadInventory() {
         container.appendChild(div);
     });
 }
-
-window.editProduct = async (id) => {
-    try {
-        const docRef = doc(db, "products", id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-            const p = docSnap.data();
-            
-            // Pré-remplissage des champs
-            productForm.elements['name'].value = p.name;
-            productForm.elements['latinName'].value = p.latinName;
-            productForm.elements['price'].value = p.price;
-            productForm.elements['stock'].value = p.stock;
-            productForm.elements['category'].value = p.category;
-            productForm.elements['difficulty'].value = p.difficulty;
-            productForm.elements['description'].value = p.description;
-            
-            // Passage de l'interface en mode édition
-            editProductId = id;
-            document.getElementById('btnSubmit').textContent = "METTRE À JOUR LE PRODUIT";
-            document.getElementById('productFiles').required = false; 
-            
-            window.scrollTo(0, 0);
-        }
-    } catch (error) {
-        console.error("Erreur de chargement :", error);
-        alert("Impossible de charger le produit.");
-    }
-};
 
 window.deleteProduct = async (id) => {
     if(confirm("Êtes-vous sûr de vouloir supprimer définitivement cet insecte et ses photos ?")) {
@@ -241,7 +242,9 @@ async function loadOrders() {
                 for (const item of order.items) {
                     const prodSnap = await getDoc(doc(db, "products", item.id));
                     const prodName = prodSnap.exists() ? prodSnap.data().name : "Spécimen supprimé";
-                    itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}</li>`;
+                    // NOUVEAU : Affichage du Lot sélectionné dans le pannel admin
+                    const lotText = item.lotSize ? ` (Lot de ${item.lotSize})` : '';
+                    itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}${lotText}</li>`;
                 }
             }
 

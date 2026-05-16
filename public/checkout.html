@@ -122,11 +122,20 @@
             for (let i = 0; i < cart.length; i++) {
                 const pSnap = await getDoc(doc(db, "products", cart[i].id));
                 const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
-                const price = pSnap.exists() ? (pSnap.data().price * cart[i].quantity).toFixed(2) : 0;
+                
+                // NOUVEAU : Prise en compte du prix du lot sélectionné
+                const itemLot = cart[i].lotSize;
+                let itemPrice = pSnap.exists() ? pSnap.data().price : 0;
+                if (itemLot === 5) itemPrice = pSnap.data().price5;
+                if (itemLot === 10) itemPrice = pSnap.data().price10;
+
+                const itemTotal = itemPrice * cart[i].quantity;
+                const lotText = itemLot ? ` (Lot de ${itemLot})` : '';
+
                 html += `
                     <div class="summary-item">
-                        <span><strong>x${cart[i].quantity}</strong> ${name}</span>
-                        <span>${price} €</span>
+                        <span><strong>x${cart[i].quantity}</strong> ${name}${lotText}</span>
+                        <span>${itemTotal.toFixed(2)} €</span>
                     </div>
                 `;
             }

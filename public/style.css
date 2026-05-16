@@ -971,6 +971,157 @@ footer {
     }
 }
 
+/* ========================================= */
+/* NOUVEAU : PAGE PRODUIT & FICHES (CORRIGÉ) */
+/* ========================================= */
+
+.product-page-layout {
+    display: grid;
+    /* La magie opère ici : 60% pour l'image, 35% pour l'achat, 5% d'espace */
+    grid-template-columns: 60% 35%;
+    justify-content: space-between;
+    gap: 40px;
+    margin-top: 40px;
+    margin-bottom: 80px;
+    align-items: start; /* Empêche la colonne de droite de s'étirer vers le bas */
+}
+
+/* --- Colonne de Gauche (Images & Description) --- */
+
+.gallery-wrapper {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+}
+
+.thumbnails {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 80px;
+    flex-shrink: 0; /* Empêche les miniatures de s'écraser */
+}
+
+.thumbnails img {
+    width: 100%;
+    aspect-ratio: 1/1;
+    object-fit: cover;
+    cursor: pointer;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.thumbnails img:hover {
+    opacity: 0.8;
+    transform: translateX(3px); /* Petit effet interactif */
+    border-color: var(--accent-brown);
+}
+
+.main-image {
+    flex: 1; /* L'image principale prend tout l'espace restant des 60% */
+}
+
+.main-image img {
+    width: 100%;
+    height: auto;
+    max-height: 600px;
+    object-fit: cover; /* Remplit bien l'espace sans se déformer */
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(74, 66, 56, 0.08);
+}
+
+.product-description-bottom {
+    margin-top: 30px;
+    background: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid var(--border-light);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #555;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+}
+
+/* --- Colonne de Droite (Achat & Fiche) --- */
+
+.product-right {
+    position: sticky;
+    top: 100px; /* L'interface d'achat reste à l'écran quand on lit la description */
+}
+
+.lot-selector {
+    margin-bottom: 25px;
+}
+
+.lot-selector select {
+    width: 100%;
+    padding: 15px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    background: white;
+    cursor: pointer;
+    color: var(--accent-brown);
+    font-weight: 600;
+}
+
+.care-guide-section {
+    margin-top: 30px;
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+}
+
+.care-guide-section h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--accent-brown);
+    margin-top: 0;
+    font-size: 1.4rem;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 20px;
+}
+
+.care-guide-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #666;
+}
+
+#productDetails {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+/* --- Responsive Mobile --- */
+@media (max-width: 992px) {
+    .product-page-layout {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+    .product-right {
+        position: static;
+    }
+    .gallery-wrapper { 
+        flex-direction: column-reverse; 
+    }
+    .thumbnails { 
+        flex-direction: row; 
+        width: 100%; 
+        overflow-x: auto; 
+    }
+    .thumbnails img { 
+        width: 70px; 
+    }
+}
+
 
 
 

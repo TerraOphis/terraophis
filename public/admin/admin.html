@@ -38,7 +38,9 @@
                         <input type="text" name="latinName" placeholder="Nom latin (ex: Hymenopus coronatus)" required>
                     </div>
                     <div class="form-group">
-                        <input type="number" name="price" placeholder="Prix (€)" step="0.01" required>
+                        <input type="number" name="price" placeholder="Prix à l'unité (Accessoires)" step="0.01">
+                        <input type="number" name="price5" placeholder="Prix Lot de 5 (€)" step="0.01">
+                        <input type="number" name="price10" placeholder="Prix Lot de 10 (€)" step="0.01">
                         <input type="number" name="stock" placeholder="Quantité en stock" required>
                     </div>
                     <div class="form-group">
@@ -58,7 +60,9 @@
                             <option value="expert">Expert</option>
                         </select>
                     </div>
-                    <textarea name="description" placeholder="Description de l'espèce et conseils d'élevage..." rows="5" required></textarea>
+                    <textarea name="description" placeholder="Description de l'espèce..." rows="4" required></textarea>
+                    <textarea name="careGuide" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)" rows="4"></textarea>
+                    
                     <div class="file-input-area">
                         <label for="productFiles">Photos du produit (Max 5)</label>
                         <input type="file" id="productFiles" multiple accept="image/*">

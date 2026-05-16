@@ -82,19 +82,26 @@ async function loadCatalogue() {
 
             productsToDisplay.forEach((product) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
+                const basePrice = product.price || product.price5 || 0;
+                
+                // NOUVEAU : Si le produit a des lots, on force l'utilisateur à aller sur la fiche pour choisir
+                const hasLots = product.price5 || product.price10;
+                const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
+                const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
+
                 const card = document.createElement('div');
                 card.className = 'product-card';
                 card.innerHTML = `
-                    <a href="/produit?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
+                    <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
                         <img src="${photoUrl}" alt="${product.name}" class="product-image">
                         <div class="product-info">
                             <p class="product-latin">${product.latinName}</p>
                             <h3 class="product-name">${product.name}</h3>
-                            <p class="product-price">${product.price} €</p>
+                            <p class="product-price">${basePrice} €</p>
                         </div>
                     </a>
-                    <button class="btn-buy" onclick="addToCart('${product.id}')" ${product.stock <= 0 ? 'disabled' : ''} style="${product.stock <= 0 ? 'background-color: #ccc; cursor: not-allowed;' : ''}">
-                        ${product.stock > 0 ? 'AJOUTER AU PANIER' : 'ÉPUISÉ'}
+                    <button class="btn-buy" onclick="${btnAction}" ${product.stock <= 0 ? 'disabled' : ''} style="${product.stock <= 0 ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
+                        ${product.stock > 0 ? btnText : 'ÉPUISÉ'}
                     </button>
                 `;
                 productGrid.appendChild(card);
@@ -141,25 +148,126 @@ async function loadCatalogue() {
     }
 }
 
-window.addToCart = async (productId) => {
-    // NOUVEAU : On vérifie le stock réel en direct sur Firestore
+async function loadProductDetails() {
+    const detailsContainer = document.getElementById('productDetails');
+    if (!detailsContainer) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
+
+    if (!productId) {
+        detailsContainer.innerHTML = '<p>Produit introuvable.</p>';
+        return;
+    }
+
+    try {
+        const docRef = doc(db, "products", productId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const product = docSnap.data();
+            const photos = product.photos && product.photos.length > 0 ? product.photos : ['assets/img/placeholder.jpg'];
+            const formattedDescription = product.description.replace(/\n/g, '<br>');
+            const careGuideHtml = product.careGuide ? product.careGuide.replace(/\n/g, '<br>') : 'Aucune information complémentaire.';
+
+            // NOUVEAU : Construction de la liste des miniatures cliquables
+            let thumbnailsHtml = '';
+            photos.forEach((photo, index) => {
+                thumbnailsHtml += `<img src="${photo}" alt="Miniature" onclick="document.getElementById('mainProductImg').src='${photo}'">`;
+            });
+
+            // NOUVEAU : Sélecteur dynamique de Lots
+            let basePrice = product.price || product.price5 || 0;
+            let lotSelectorHtml = '';
+            
+            if (product.price5 || product.price10) {
+                lotSelectorHtml = `
+                    <div class="lot-selector">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:5px;">Quantité</label>
+                        <select id="lotSelect" onchange="updateDisplayPrice(this.value, ${product.price5 || 0}, ${product.price10 || 0})">
+                            ${product.price5 ? `<option value="5">Lot de 5 - ${product.price5} €</option>` : ''}
+                            ${product.price10 ? `<option value="10">Lot de 10 - ${product.price10} €</option>` : ''}
+                        </select>
+                    </div>
+                `;
+            }
+
+            // NOUVEAU : Grille structurée (Image/Desc à gauche, Achat/Fiche à droite)
+            detailsContainer.innerHTML = `
+                <div class="product-page-layout">
+                    <div class="product-left">
+                        <div class="gallery-wrapper">
+                            <div class="thumbnails">${thumbnailsHtml}</div>
+                            <div class="main-image">
+                                <img src="${photos[0]}" id="mainProductImg" alt="${product.name}">
+                            </div>
+                        </div>
+                        <div class="product-description-bottom">
+                            ${formattedDescription}
+                        </div>
+                    </div>
+                    
+                    <div class="product-right">
+                        <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
+                        <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName}</p>
+                        <p class="product-price" id="displayPrice" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${basePrice} €</p>
+                        
+                        ${lotSelectorHtml}
+
+                        <button class="btn-buy" onclick="addSelectedToCart('${docSnap.id}')" style="width: 100%; padding: 18px; font-size: 1.1rem; margin-bottom: 10px;" ${product.stock <= 0 ? 'disabled' : ''}>
+                            ${product.stock > 0 ? 'Ajouter au panier' : 'RUPTURE DE STOCK'}
+                        </button>
+                        <p style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 0;">Stock dispo : ${product.stock}</p>
+                        
+                        <div class="care-guide-section">
+                            <h3>Fiche Complémentaire</h3>
+                            <div class="care-guide-content">${careGuideHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            detailsContainer.innerHTML = '<p>Ce produit n\'existe plus.</p>';
+        }
+    } catch (error) {
+        console.error("Erreur détails produit :", error);
+        detailsContainer.innerHTML = '<p>Erreur lors du chargement.</p>';
+    }
+}
+
+// Fonctions globales pour le fonctionnement de la page et du panier
+window.updateDisplayPrice = (val, p5, p10) => {
+    const p = val == 10 ? p10 : p5;
+    document.getElementById('displayPrice').textContent = p + ' €';
+};
+
+window.addSelectedToCart = (id) => {
+    const select = document.getElementById('lotSelect');
+    const lotSize = select ? parseInt(select.value) : null;
+    addToCart(id, lotSize);
+};
+
+// NOUVEAU : Logique du panier mise à jour pour inclure les lots
+window.addToCart = async (productId, lotSize = null) => {
     const docSnap = await getDoc(doc(db, "products", productId));
     if (!docSnap.exists()) return;
     const maxStock = docSnap.data().stock;
 
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-    const existingItem = cart.find(item => item.id === productId);
+    
+    // On crée un ID unique pour le panier (ex: "id_insecte_5" et "id_insecte_10" sont séparés)
+    const cartId = lotSize ? `${productId}_${lotSize}` : productId;
+    const existingItem = cart.find(item => item.cartId === cartId);
     
     if (existingItem) {
-        // NOUVEAU : Blocage de l'ajout si le stock maximum est atteint
         if (existingItem.quantity >= maxStock) {
             alert("Stock maximum atteint pour ce spécimen 🌿");
             return;
         }
         existingItem.quantity += 1;
     } else {
-        if (maxStock < 1) return; // Sécurité anti-rupture
-        cart.push({ id: productId, quantity: 1 });
+        if (maxStock < 1) return; 
+        cart.push({ id: productId, cartId: cartId, lotSize: lotSize, quantity: 1 });
     }
     
     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
@@ -193,72 +301,68 @@ window.renderCart = async () => {
             if (docSnap.exists()) {
                 const p = docSnap.data();
                 
-                // NOUVEAU : Ajustement automatique si le stock a baissé sur le site
+                // NOUVEAU : Application dynamique du prix selon le lot choisi
+                const itemLot = cart[i].lotSize;
+                let itemPrice = p.price;
+                if (itemLot === 5) itemPrice = p.price5;
+                if (itemLot === 10) itemPrice = p.price10;
+
                 if (cart[i].quantity > p.stock) {
                     cart[i].quantity = p.stock;
                     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
                 }
                 
                 if (cart[i].quantity > 0) {
-                    const itemTotal = p.price * cart[i].quantity;
+                    const itemTotal = itemPrice * cart[i].quantity;
                     total += itemTotal;
                     const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
+                    const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
 
-                    // NOUVEAU : Ajout de la croix de suppression et de maxStock pour le bouton +
                     html += `
                         <div class="cart-item" style="position: relative;">
                             <img src="${photo}" alt="${p.name}">
                             <div class="cart-item-details">
-                                <button onclick="removeFromCart('${cart[i].id}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
-                                <p class="cart-item-title" style="padding-right: 20px;">${p.name}</p>
-                                <p class="cart-item-price">${p.price} €</p>
+                                <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+                                <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
+                                <p class="cart-item-price">${itemPrice} €</p>
                                 <div class="cart-qty-controls">
-                                    <button onclick="updateCartQty('${cart[i].id}', -1, ${p.stock})">-</button>
+                                    <button onclick="updateCartQty('${cart[i].cartId}', -1, ${p.stock})">-</button>
                                     <span>${cart[i].quantity}</span>
-                                    <button onclick="updateCartQty('${cart[i].id}', 1, ${p.stock})">+</button>
+                                    <button onclick="updateCartQty('${cart[i].cartId}', 1, ${p.stock})">+</button>
                                 </div>
                             </div>
                         </div>
                     `;
                 }
             }
-        } catch (e) {
-            console.error("Erreur panier :", e);
-        }
+        } catch (e) { console.error("Erreur panier :", e); }
     }
 
-    container.innerHTML = html || '<p style="text-align: center; margin-top: 50px; color: #888;">Les articles de votre panier ne sont plus en stock.</p>';
+    container.innerHTML = html || '<p style="text-align: center; color: #888;">Panier obsolète.</p>';
     totalEl.textContent = total.toFixed(2) + ' €';
     localStorage.setItem('terraophis_cart_total', total);
 };
 
-// NOUVEAU : Transmission du maxStock pour bloquer l'incrémentation dans le panier
-window.updateCartQty = (productId, change, maxStock) => {
+window.updateCartQty = (cartId, change, maxStock) => {
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-    const itemIndex = cart.findIndex(item => item.id === productId);
+    const itemIndex = cart.findIndex(item => item.cartId === cartId);
     
     if (itemIndex > -1) {
         const newQty = cart[itemIndex].quantity + change;
-        
-        // NOUVEAU : Alerte si on essaye d'augmenter au-delà du dispo
         if (change > 0 && newQty > maxStock) {
             alert("Stock maximum atteint pour ce spécimen 🌿");
             return;
         }
-        
         cart[itemIndex].quantity = newQty;
-        if (cart[itemIndex].quantity <= 0) {
-            cart.splice(itemIndex, 1);
-        }
+        if (cart[itemIndex].quantity <= 0) cart.splice(itemIndex, 1);
         localStorage.setItem('terraophis_cart', JSON.stringify(cart));
         renderCart();
     }
 };
 
-// NOUVEAU : Fonction de suppression totale de l'article
-window.removeFromCart = (productId) => {
+window.removeFromCart = (cartId) => {
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-    cart = cart.filter(item => item.id !== productId);
+    cart = cart.filter(item => item.cartId !== cartId);
     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
     renderCart();
 };
@@ -376,116 +480,6 @@ async function loadHeroSlider() {
         }
     } catch (error) {
         console.error("Erreur de chargement du slider :", error);
-    }
-}
-
-// NOUVEAU : Fonction pour charger les détails d'un produit spécifique sur produit.html
-async function loadProductDetails() {
-    const detailsContainer = document.getElementById('productDetails');
-    if (!detailsContainer) return;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const productId = urlParams.get('id');
-
-    if (!productId) {
-        detailsContainer.innerHTML = '<p>Produit introuvable.</p>';
-        return;
-    }
-
-    try {
-        const docRef = doc(db, "products", productId);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            const product = docSnap.data();
-            
-            // NOUVEAU : Récupération de toutes les photos (ou placeholder par défaut)
-            const photos = product.photos && product.photos.length > 0 ? product.photos : ['assets/img/placeholder.jpg'];
-            const formattedDescription = product.description.replace(/\n/g, '<br>');
-
-            // NOUVEAU : Construction dynamique du HTML du carrousel avec gestion des flèches si besoin
-            let sliderHtml = `<div class="product-slider-container" style="position: relative; overflow: hidden; border-radius: 12px; width: 100%; aspect-ratio: 1/1;">`;
-            
-            photos.forEach((photo, index) => {
-                sliderHtml += `<img src="${photo}" alt="${product.name} - Photo ${index + 1}" class="product-slide" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; opacity: ${index === 0 ? 1 : 0}; transition: opacity 0.8s ease-in-out;">`;
-            });
-
-            if (photos.length > 1) {
-                sliderHtml += `
-                    <button class="slider-arrow prev" style="position: absolute; top: 50%; left: 10px; transform: translateY(-50%); background: rgba(255,255,255,0.7); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; color: var(--accent-brown); z-index: 10;">‹</button>
-                    <button class="slider-arrow next" style="position: absolute; top: 50%; right: 10px; transform: translateY(-50%); background: rgba(255,255,255,0.7); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; color: var(--accent-brown); z-index: 10;">›</button>
-                `;
-            }
-            sliderHtml += `</div>`;
-
-            detailsContainer.innerHTML = `
-                <div class="product-gallery">
-                    ${sliderHtml}
-                </div>
-                
-                <div class="product-info-full">
-                    <p class="product-latin" style="font-size: 1.2rem;">${product.latinName}</p>
-                    <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin-top: 5px;">${product.name}</h1>
-                    <p class="product-price" style="font-size: 1.5rem;">${product.price} €</p>
-                    
-                    <div style="margin: 20px 0; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid var(--border-light);">
-                        <strong>Difficulté :</strong> <span style="text-transform: capitalize;">${product.difficulty}</span>
-                    </div>
-
-                    <div style="margin-bottom: 30px; line-height: 1.6;">
-                        ${formattedDescription}
-                    </div>
-
-                    <button class="btn-buy" onclick="addToCart('${docSnap.id}')" style="width: 100%; padding: 20px; font-size: 1.2rem;" ${product.stock <= 0 ? 'disabled' : ''}>
-                        ${product.stock > 0 ? 'AJOUTER AU PANIER' : 'RUPTURE DE STOCK'}
-                    </button>
-                    
-                    <p style="text-align: center; font-size: 0.8rem; margin-top: 10px; color: #666;">
-                        En stock : ${product.stock}
-                    </p>
-                </div>
-            `;
-
-            // NOUVEAU : Logique de défilement (manuel et automatique) pour la galerie
-            if (photos.length > 1) {
-                let currentSlide = 0;
-                const slides = detailsContainer.querySelectorAll('.product-slide');
-                const btnPrev = detailsContainer.querySelector('.slider-arrow.prev');
-                const btnNext = detailsContainer.querySelector('.slider-arrow.next');
-                let slideInterval;
-
-                const goToSlide = (n) => {
-                    slides[currentSlide].style.opacity = 0;
-                    currentSlide = (n + slides.length) % slides.length;
-                    slides[currentSlide].style.opacity = 1;
-                };
-
-                const nextSlide = () => goToSlide(currentSlide + 1);
-                const prevSlide = () => goToSlide(currentSlide - 1);
-
-                btnNext.addEventListener('click', () => { nextSlide(); resetInterval(); });
-                btnPrev.addEventListener('click', () => { prevSlide(); resetInterval(); });
-
-                // Défilement automatique toutes les 5 secondes
-                const startInterval = () => {
-                    slideInterval = setInterval(nextSlide, 5000); 
-                };
-
-                // Réinitialise le chrono si l'utilisateur clique sur une flèche
-                const resetInterval = () => {
-                    clearInterval(slideInterval);
-                    startInterval();
-                };
-
-                startInterval();
-            }
-
-        } else {
-            detailsContainer.innerHTML = '<p>Ce produit n\'existe plus.</p>';
-        }
-    } catch (error) {
-        console.error("Erreur détails produit :", error);
-        detailsContainer.innerHTML = '<p>Erreur lors du chargement.</p>';
     }
 }
 
