@@ -531,6 +531,9 @@ async function loadNavbar() {
             });
         }
 
+        // AJOUT : Ciblage des éléments dropdown manquants pour corriger la ReferenceError
+        const dropdowns = navElement.querySelectorAll('.dropdown');
+
         dropdowns.forEach(dropdown => {
             dropdown.addEventListener('click', (e) => {
                 // Sur mobile, cliquer sur "BOUTIQUE" ouvre le sous-menu au lieu de rediriger direct
