@@ -63,10 +63,14 @@
 .form-group {
     display: flex;
     gap: 15px;
+    /* Nouveau : Permet aux éléments de passer à la ligne s'il n'y a plus de place */
+    flex-wrap: wrap; 
 }
 
 .form-group input, .form-group select {
+    /* Nouveau : Utilisation de min-width au lieu du flex-basis pour ne pas affecter la hauteur sur mobile */
     flex: 1;
+    min-width: 150px;
 }
 
 input, select, textarea {
@@ -77,6 +81,9 @@ input, select, textarea {
     color: var(--accent-brown);
     font-family: inherit;
     font-size: 0.9rem;
+    /* Nouveau : Empêche le padding et les bordures de faire déborder l'élément */
+    box-sizing: border-box; 
+    width: 100%;
 }
 
 input:focus, select:focus, textarea:focus {
