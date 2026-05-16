@@ -685,10 +685,104 @@ async function loadInstaGallery() {
     }
 }
 
+
+// NOUVEAU : Charge la grille de tous les guides pour la page conseils.html
+async function loadGuidesList() {
+    const grid = document.getElementById('guidesGrid');
+    if (!grid) return;
+    
+    grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1;">Chargement des guides... 🌿</p>';
+    
+    try {
+        const q = query(collection(db, "guides"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) {
+            grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color: #888;">Aucun guide publié pour le moment.</p>';
+            return;
+        }
+        
+        grid.innerHTML = '';
+        snap.forEach(docSnap => {
+            const g = docSnap.data();
+            
+            // Astuce pour créer un extrait texte propre sans les balises HTML de l'éditeur
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = g.content;
+            let excerpt = tempDiv.textContent || tempDiv.innerText || "";
+            excerpt = excerpt.length > 150 ? excerpt.substring(0, 150) + "..." : excerpt;
+            
+            const cover = g.imageUrl || 'assets/img/placeholder.jpg';
+            
+            const card = document.createElement('div');
+            card.className = 'guide-card';
+            card.innerHTML = `
+                <a href="/guide.html?id=${docSnap.id}" style="text-decoration: none; color: inherit;">
+                    <img src="${cover}" alt="${g.title}" class="guide-image">
+                    <div class="guide-info">
+                        <h3>${g.title}</h3>
+                        <p>${excerpt}</p>
+                        <span class="read-more">Lire la suite →</span>
+                    </div>
+                </a>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (error) {
+        console.error("Erreur chargement guides:", error);
+        grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1;">Erreur lors du chargement.</p>';
+    }
+}
+
+// NOUVEAU : Charge un guide spécifique en entier pour la page guide.html
+async function loadSingleGuide() {
+    const container = document.getElementById('singleGuideContainer');
+    if (!container) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const guideId = urlParams.get('id');
+
+    if (!guideId) {
+        container.innerHTML = '<p style="text-align:center;">Guide introuvable.</p>';
+        return;
+    }
+
+    try {
+        const docRef = doc(db, "guides", guideId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const g = docSnap.data();
+            const dateObj = g.createdAt?.toDate() ? g.createdAt.toDate().toLocaleDateString('fr-FR') : '';
+            const cover = g.imageUrl ? `<img src="${g.imageUrl}" alt="${g.title}" class="guide-hero-img">` : '';
+
+            container.innerHTML = `
+                <header class="guide-header">
+                    <h1>${g.title}</h1>
+                    <p class="guide-meta">Publié le ${dateObj}</p>
+                </header>
+                ${cover}
+                <div class="guide-content-body">
+                    ${g.content}
+                </div>
+            `;
+        } else {
+            container.innerHTML = '<p style="text-align:center;">Cette fiche conseil n\'existe plus.</p>';
+        }
+    } catch (error) {
+        console.error("Erreur détails guide :", error);
+        container.innerHTML = '<p style="text-align:center;">Erreur lors du chargement.</p>';
+    }
+}
+
+
 // On lance les fonctions
 loadFooter();
 loadFeaturesGrid();
 loadHeroSlider();
 loadProductDetails();
 loadCatalogue();
+loadGuidesList();
+loadSingleGuide(); 
 loadNavbar();
+

@@ -137,14 +137,35 @@
                 <h2>Rédiger une fiche conseil</h2>
                 <form id="guideForm" class="product-form">
                     <input type="text" name="guideTitle" placeholder="Titre de la fiche" required>
-                    <textarea name="guideContent" placeholder="Contenu du guide..." rows="8" required></textarea>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
+                            <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
+                            <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            <button type="button" onclick="triggerInlineImageUpload('guideCareEditor')" title="Insérer une image au curseur">🖼️ + Image</button>
+                            <input type="file" id="inlineImageInput_guideCareEditor" accept="image/*" style="display: none;" onchange="handleInlineImageUpload(this, 'guideCareEditor')">
+                        </div>
+                        <div id="guideCareEditor" class="editor-content" contenteditable="true" placeholder="Contenu de la fiche conseil..."></div>
+                    </div>
+
                     <div class="file-input-area">
-                        <label for="guideFile">Image d'illustration</label>
+                        <label for="guideFile">Image d'illustration principale (Couverture)</label>
                         <input type="file" id="guideFile" accept="image/*">
                     </div>
                     <button type="submit" id="btnSubmitGuide" class="btn-buy">PUBLIER LA FICHE</button>
                     <p id="guideUploadStatus"></p>
                 </form>
+            </section>
+
+            <section class="admin-section">
+                <h2>Fiches conseils existantes</h2>
+                <div id="adminGuides" class="inventory-list"></div>
             </section>
         </div>
         
@@ -204,6 +225,41 @@
                     </div>
                     <button type="submit" id="btnSubmitEdit" class="btn-buy">METTRE À JOUR LE PRODUIT</button>
                     <p id="editUploadStatus" style="text-align: center; font-weight: 500;"></p>
+                </form>
+            </div>
+        </div>
+        <div id="editGuideModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <span class="close-modal" onclick="closeEditGuideModal()">&times;</span>
+                <h2>Modifier la fiche conseil</h2>
+                <form id="editGuideForm" class="product-form">
+                    <input type="hidden" id="editGuideId">
+                    <input type="text" id="editGuideTitle" name="guideTitle" placeholder="Titre de la fiche" required>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
+                            <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
+                            <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            <button type="button" onclick="triggerInlineImageUpload('editGuideCareEditor')" title="Insérer une image au curseur">🖼️ + Image</button>
+                            <input type="file" id="inlineImageInput_editGuideCareEditor" accept="image/*" style="display: none;" onchange="handleInlineImageUpload(this, 'editGuideCareEditor')">
+                        </div>
+                        <div id="editGuideCareEditor" class="editor-content" contenteditable="true" placeholder="Contenu du guide..."></div>
+                    </div>
+
+                    <div id="editGuideImagePreview" style="margin: 15px 0;"></div>
+
+                    <div class="file-input-area">
+                        <label for="editGuideFile">Changer l'image d'illustration principale (Couverture)</label>
+                        <input type="file" id="editGuideFile" accept="image/*">
+                    </div>
+                    <button type="submit" id="btnSubmitEditGuide" class="btn-buy">METTRE À JOUR LA FICHE</button>
+                    <p id="editGuideUploadStatus" style="text-align: center; font-weight: 500;"></p>
                 </form>
             </div>
         </div>

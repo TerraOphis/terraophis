@@ -24,6 +24,7 @@ onAuthStateChanged(auth, (user) => {
             loadOrders();
             loadSliderPreview();
             loadGridPreviews();
+            loadGuides();
         } else {
             console.warn("Accès refusé pour :", user.email);
             // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
@@ -548,12 +549,9 @@ guideForm.addEventListener('submit', async (e) => {
         guideStatusMsg.textContent = "Enregistrement de la fiche... ⏳";
         let imageUrl = null;
 
-        // Si une image est sélectionnée, on l'envoie sur R2 via ton API d'upload existante
         if (fileInput.files.length > 0) {
-            guideStatusMsg.textContent = "Téléchargement de l'image... ⏳";
+            guideStatusMsg.textContent = "Téléchargement de l'image de couverture... ⏳";
             const uploadData = new FormData();
-            
-            // On utilise la clé 'photos' attendue par ton middleware multer côté serveur
             uploadData.append('photos', fileInput.files[0]); 
             
             const token = await auth.currentUser.getIdToken();
@@ -571,17 +569,20 @@ guideForm.addEventListener('submit', async (e) => {
             }
         }
 
-        // Création du document dans la nouvelle collection 'guides'
         guideStatusMsg.textContent = "Création de la fiche...";
+        const guideContentHtml = document.getElementById('guideCareEditor').innerHTML;
+
         await addDoc(collection(db, "guides"), {
             title: formData.get('guideTitle'),
-            content: formData.get('guideContent'),
+            content: guideContentHtml,
             imageUrl: imageUrl,
             createdAt: serverTimestamp()
         });
 
         guideStatusMsg.textContent = "✅ Fiche conseil publiée avec succès !";
         guideForm.reset();
+        document.getElementById('guideCareEditor').innerHTML = '';
+        loadGuides();
         
     } catch (err) {
         console.error("Erreur lors de la création de la fiche :", err);
@@ -814,4 +815,211 @@ window.moveGridImg = async (type, index, direction) => {
 // Nouveau : Fonction globale de formatage à la volée du texte sélectionné
 window.formatDoc = (cmd) => {
     document.execCommand(cmd, false, null);
+};
+
+async function loadGuides() {
+    const container = document.getElementById('adminGuides');
+    if (!container) return;
+    container.innerHTML = '<p>Chargement des fiches conseils...</p>';
+    
+    try {
+        const q = query(collection(db, "guides"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        
+        container.innerHTML = '';
+        if (snap.empty) {
+            container.innerHTML = '<p style="font-size:0.9rem; color:#888;">Aucune fiche conseil publiée pour le moment.</p>';
+            return;
+        }
+
+        snap.forEach(guideDoc => {
+            const g = guideDoc.data();
+            const div = document.createElement('div');
+            div.className = 'inventory-item';
+            
+            const coverPhoto = g.imageUrl || '../assets/img/placeholder.jpg';
+            const dateObj = g.createdAt?.toDate() ? g.createdAt.toDate().toLocaleDateString('fr-FR') : 'Date inconnue';
+            
+            div.innerHTML = `
+                <img src="${coverPhoto}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <span style="font-weight:600; font-size:1.1rem;">${g.title}</span>
+                    <span style="font-size:0.85rem; color:#888;">Publié le ${dateObj}</span>
+                </div>
+                <div></div>
+                <div></div>
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button onclick="editGuide('${guideDoc.id}')" class="btn-outline">Gérer</button>
+                    <button onclick="deleteGuide('${guideDoc.id}')" class="btn-logout" style="border:none;">Supprimer</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    } catch (error) {
+        console.error("Erreur lors du chargement des guides :", error);
+        container.innerHTML = '<p>Erreur lors du chargement des fiches.</p>';
+    }
+}
+
+window.editGuide = async (id) => {
+    try {
+        const docRef = doc(db, "guides", id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const g = docSnap.data();
+            
+            document.getElementById('editGuideId').value = id;
+            document.getElementById('editGuideTitle').value = g.title || '';
+            document.getElementById('editGuideCareEditor').innerHTML = g.content || '';
+            
+            const previewContainer = document.getElementById('editGuideImagePreview');
+            if (g.imageUrl) {
+                previewContainer.innerHTML = `
+                    <img src="${g.imageUrl}" style="width:100px; height:60px; object-fit:cover; border-radius:4px; border:1px solid var(--border-color); display:block; margin-bottom:5px;">
+                    <span style="font-size:0.8rem; color:#666;">Couverture actuelle</span>
+                `;
+            } else {
+                previewContainer.innerHTML = '<p style="font-size:0.85rem; color:#888;">Aucune image de couverture actuelle.</p>';
+            }
+            
+            document.getElementById('editGuideModal').style.display = 'flex';
+        }
+    } catch (error) {
+        console.error("Erreur de chargement de la fiche :", error);
+        alert("Impossible de charger la fiche conseil.");
+    }
+};
+
+window.closeEditGuideModal = () => {
+    document.getElementById('editGuideModal').style.display = 'none';
+    document.getElementById('editGuideForm').reset();
+    document.getElementById('editGuideCareEditor').innerHTML = '';
+    document.getElementById('editGuideUploadStatus').textContent = '';
+};
+
+document.getElementById('editGuideForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitEditGuide');
+    const statusText = document.getElementById('editGuideUploadStatus');
+    const formData = new FormData(e.target);
+    const fileInput = document.getElementById('editGuideFile');
+    const guideId = document.getElementById('editGuideId').value;
+
+    try {
+        btn.disabled = true;
+        statusText.textContent = fileInput.files.length > 0 ? "Téléchargement de la nouvelle couverture... ⏳" : "Mise à jour de la fiche... ⏳";
+
+        const docRef = doc(db, "guides", guideId);
+        const docSnap = await getDoc(docRef);
+        let imageUrl = docSnap.exists() ? docSnap.data().imageUrl : null;
+
+        if (fileInput.files.length > 0) {
+            const uploadData = new FormData();
+            uploadData.append('photos', fileInput.files[0]);
+            
+            const token = await auth.currentUser.getIdToken();
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: uploadData
+            });
+
+            if (!response.ok) throw new Error("Échec de l'upload de la nouvelle couverture");
+            const { files: uploadedFiles } = await response.json();
+            if (uploadedFiles && uploadedFiles.length > 0) {
+                imageUrl = uploadedFiles[0].url;
+            }
+        }
+
+        const guideContentHtml = document.getElementById('editGuideCareEditor').innerHTML;
+
+        await updateDoc(docRef, {
+            title: formData.get('guideTitle'),
+            content: guideContentHtml,
+            imageUrl: imageUrl
+        });
+
+        statusText.textContent = "✅ Fiche conseil mise à jour !";
+        loadGuides();
+        setTimeout(() => closeEditGuideModal(), 1500);
+    } catch (err) {
+        console.error(err);
+        statusText.textContent = "❌ Erreur : " + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+window.deleteGuide = async (id) => {
+    if (confirm("Êtes-vous sûr de vouloir supprimer définitivement cette fiche conseil ?")) {
+        try {
+            const docRef = doc(db, "guides", id);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+                const guide = docSnap.data();
+                if (guide.imageUrl) {
+                    const key = new URL(guide.imageUrl).pathname.substring(1);
+                    const token = await auth.currentUser.getIdToken();
+                    await fetch('/api/delete', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` 
+                        },
+                        body: JSON.stringify({ keys: [key] })
+                    });
+                }
+            }
+            
+            await deleteDoc(docRef);
+            loadGuides();
+        } catch (error) {
+            console.error("Erreur lors de la suppression de la fiche :", error);
+            alert("Une erreur est survenue lors de la suppression.");
+        }
+    }
+};
+
+window.triggerInlineImageUpload = (editorId) => {
+    document.getElementById(`inlineImageInput_${editorId}`).click();
+};
+
+window.handleInlineImageUpload = async (input, editorId) => {
+    const file = input.files[0];
+    if (!file) return;
+
+    const editor = document.getElementById(editorId);
+    editor.focus();
+
+    try {
+        const uploadData = new FormData();
+        uploadData.append('photos', file);
+
+        const token = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: uploadData
+        });
+
+        if (!response.ok) throw new Error("Échec de l'upload de l'image insérée");
+
+        const { files: uploadedFiles } = await response.json();
+        if (uploadedFiles && uploadedFiles.length > 0) {
+            const imageUrl = uploadedFiles[0].url;
+            document.execCommand('insertImage', false, imageUrl);
+        }
+    } catch (err) {
+        console.error("Erreur lors de l'insertion de l'image :", err);
+        alert("Impossible d'insérer l'image à cet emplacement.");
+    } finally {
+        input.value = '';
+    }
+};
+
+// Modification de l'utilitaire existant pour accepter les paramètres optionnels (ex: types de blocs ou alignements)
+window.formatDoc = (cmd, value = null) => {
+    document.execCommand(cmd, false, value);
 };
