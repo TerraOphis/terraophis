@@ -82,7 +82,6 @@ async function loadCatalogue() {
             productsToDisplay.forEach((product) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
                 
-                // NOUVEAU : Logique de tarification en cascade (Unité -> Lot de 5 -> Lot de 10) avec texte gris
                 let basePrice = 0;
                 let lotText = '';
                 
@@ -100,10 +99,15 @@ async function loadCatalogue() {
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
 
+                // NOUVEAU : Génération du badge "Bientôt épuisé" si le stock est entre 1 et 10
+                const isLowStock = product.stock > 0 && product.stock <= 10;
+                const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
+
                 const card = document.createElement('div');
                 card.className = 'product-card';
                 card.innerHTML = `
-                    <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
+                    <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
+                        ${badgeHtml}
                         <img src="${photoUrl}" alt="${product.name}" class="product-image">
                         <div class="product-info">
                             <p class="product-latin">${product.latinName}</p>
@@ -136,10 +140,25 @@ async function loadCatalogue() {
             }
 
             const sortType = sortSelect?.value;
-            if (sortType === 'price-asc') filtered.sort((a, b) => (a.price || a.price5 || a.price10) - (b.price || b.price5 || b.price10));
-            else if (sortType === 'price-desc') filtered.sort((a, b) => (b.price || b.price5 || b.price10) - (a.price || a.price5 || a.price10));
-            else if (sortType === 'name-asc') filtered.sort((a, b) => a.name.localeCompare(b.name));
-            else if (sortType === 'newest') filtered.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            
+            // NOUVEAU : On repousse systématiquement les articles épuisés à la fin, avant d'appliquer le tri utilisateur
+            filtered.sort((a, b) => {
+                const aEpuise = a.stock <= 0;
+                const bEpuise = b.stock <= 0;
+
+                // Si a est épuisé et pas b, a descend à la fin
+                if (aEpuise && !bEpuise) return 1;  
+                // Si b est épuisé et pas a, a monte
+                if (!aEpuise && bEpuise) return -1; 
+
+                // Si les deux sont dispos (ou les deux épuisés), on applique le tri normal choisi par le client
+                if (sortType === 'price-asc') return (a.price || a.price5 || a.price10) - (b.price || b.price5 || b.price10);
+                if (sortType === 'price-desc') return (b.price || b.price5 || b.price10) - (a.price || a.price5 || a.price10);
+                if (sortType === 'name-asc') return a.name.localeCompare(b.name);
+                
+                // Tri par défaut (newest)
+                return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0); 
+            });
 
             renderProducts(filtered);
         };

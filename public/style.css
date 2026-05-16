@@ -1100,6 +1100,30 @@ footer {
     padding: 0;
 }
 
+/* ========================================= */
+/* NOUVEAU : BADGE STOCK BOUTIQUE            */
+/* ========================================= */
+.low-stock-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: #4d5d30; /* Le vert du logo */
+    color: #eadb9d; /* Un jaune/doré doux raccord avec le thème */
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 4px;
+    z-index: 2;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    pointer-events: none; /* Empêche le badge de bloquer le clic sur l'image */
+}
+
+
+
+
+
 /* --- Responsive Mobile --- */
 @media (max-width: 992px) {
     .product-page-layout {
