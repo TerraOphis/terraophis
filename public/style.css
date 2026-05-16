@@ -1275,6 +1275,25 @@ footer {
     }
 }
 
+/* ========================================= */
+/* NOUVEAU : STYLE OUTILS EDITEUR DE TEXTE   */
+/* ========================================= */
+.editor-toolbar input[type="color"] {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    height: 28px;
+    width: 30px;
+    padding: 0;
+    cursor: pointer;
+    background: var(--white);
+}
+
+.toolbar-separator {
+    border-left: 1px solid var(--border-color);
+    margin: 0 5px;
+    height: 20px;
+    align-self: center;
+}
 
 
 /* --- Responsive Mobile --- */

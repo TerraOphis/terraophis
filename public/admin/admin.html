@@ -142,8 +142,18 @@
                         <div class="editor-toolbar">
                             <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
                             <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h4>')" title="Petit titre">H4</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<p>')" title="Texte normal">P</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" title="Couleur du texte">
+                            
+                            <span class="toolbar-separator"></span>
+                            
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
                             <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('underline')" title="Souligné"><u>U</u></button>
                             <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
                             <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
                             <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
@@ -240,12 +250,23 @@
                         <div class="editor-toolbar">
                             <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
                             <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h4>')" title="Petit titre">H4</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<p>')" title="Texte normal">P</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" title="Couleur du texte">
+                            
+                            <span class="toolbar-separator"></span>
+                            
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
                             <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('underline')" title="Souligné"><u>U</u></button>
                             <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
                             <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
                             <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            
                             <button type="button" onclick="triggerInlineImageUpload('editGuideCareEditor')" title="Insérer une image au curseur">🖼️ + Image</button>
                             <input type="file" id="inlineImageInput_editGuideCareEditor" accept="image/*" style="display: none;" onchange="handleInlineImageUpload(this, 'editGuideCareEditor')">
                         </div>
