@@ -1,0 +1,959 @@
+:root {
+    --primary-beige: #fcf8f2; /* Fond crème clair */
+    --accent-brown: #4a4238;  /* Texte et logo sombre */
+    --soft-white: #ffffff;
+    --border-light: rgba(74, 66, 56, 0.1);
+}
+
+body.beige-theme {
+    margin: 0;
+    font-family: 'Montserrat', sans-serif;
+    background-color: var(--primary-beige);
+    color: var(--accent-brown);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Navbar */
+.navbar {
+    background: var(--primary-beige);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    /* Ajout de l'ombre pour l'effet de surplomb */
+    box-shadow: 0 4px 15px rgba(74, 66, 56, 0.1); 
+    transition: box-shadow 0.3s ease;
+}
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 0 40px;
+}
+
+.main-logo {
+    height: 60px;
+    object-fit: contain;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 30px;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: var(--accent-brown);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.nav-links a.active {
+    border-bottom: 2px solid var(--accent-brown);
+}
+
+/* Hero Slider ajusté pour format HD Portrait */
+.hero-slider {
+    width: 80%; /* Un peu plus large pour l'équilibre visuel */
+    max-width: 1000px;
+    margin: 40px auto; /* Espace avec la nav */
+    aspect-ratio: 16 / 9; /* Format standard HD horizontal */
+    position: relative;
+    overflow: hidden;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.slide {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 40px; /* Espace propre en dessous du slider */
+    position: relative;
+    z-index: 20;
+    padding-bottom: 50px;
+}
+
+.feature-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    /* On enlève height: 400px */
+    aspect-ratio: 1 / 1; /* Force la carte à être un carré parfait */
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    gap: 2px;
+}
+
+/* On s'assure que les images remplissent bien leur cellule sans déformer */
+.feature-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.boutique-card { background-image: url('assets/img/boutique-thumb.jpg'); }
+.conseils-card { background-image: url('assets/img/conseils-thumb.jpg'); }
+
+.btn-feature {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(5px);
+    padding: 15px 40px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--accent-brown);
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.product-latin {
+    font-style: italic;
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 5px;
+    text-transform: capitalize;
+}
+
+.product-name {
+    margin: 0;
+    font-size: 1.1rem;
+    font-family: 'Playfair Display', serif;
+}
+
+.product-price {
+    font-weight: 600;
+    color: var(--accent-brown);
+    margin: 10px 0;
+}
+
+/* Login Page */
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.login-logo {
+    height: 80px;
+    margin-bottom: 30px;
+}
+
+.login-card {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(74, 66, 56, 0.05);
+    border: 1px solid var(--border-light);
+}
+
+.login-card h2 {
+    font-family: 'Playfair Display', serif;
+    margin-bottom: 10px;
+}
+
+.login-card p {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 25px;
+}
+
+.login-card input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.error-msg {
+    color: #d9534f;
+    font-size: 0.8rem;
+    margin-top: 15px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-top: 20px;
+    text-decoration: none;
+    color: var(--accent-brown);
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+/* NOUVEAU : Styles pour le menu déroulant (Dropdown) */
+.dropdown {
+    position: relative;
+    margin-bottom: -20px;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: var(--primary-beige);
+    min-width: 220px;
+    box-shadow: 0px 8px 15px rgba(74, 66, 56, 0.08);
+    padding: 15px 0;
+    z-index: 1001;
+    list-style: none;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 8px 25px;
+}
+
+.dropdown-content a {
+    color: var(--accent-brown);
+    display: block;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.85rem;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.dropdown-content a:hover {
+    color: #a49176; 
+    transform: translateX(5px); /* Petit effet de glissement sympa au survol */
+}
+
+.dropdown-subtitle {
+    font-weight: 600;
+    color: var(--accent-brown);
+    font-size: 0.9rem;
+    padding-bottom: 5px;
+    letter-spacing: 1px;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: var(--border-light);
+    margin: 10px 0;
+    padding: 0 !important;
+}
+
+/* Flèches Chevrons épurées */
+.slider-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 3.5rem;
+    font-weight: 100;
+    color: var(--accent-brown);
+    z-index: 100;
+    transition: all 0.3s ease;
+    opacity: 0.6;
+}
+
+.slider-arrow:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.1);
+}
+
+.slider-arrow.prev { left: 20px; }
+.slider-arrow.next { right: 20px; }
+
+/* Aperçu admin pour le slider et les grids */
+.admin-img-preview-grid {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    background: #f0eee7;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.admin-img-preview-grid.mini {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    width: fit-content;
+    gap: 5px;
+}
+
+.preview-item {
+    position: relative;
+    width: 120px;
+}
+
+.admin-img-preview-grid.mini .preview-item {
+    width: 60px;
+}
+
+.preview-item img {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 2px solid white;
+}
+
+.admin-img-preview-grid.mini .preview-item img {
+    height: 60px;
+}
+
+.preview-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+}
+
+.btn-delete-img {
+    background: #a35d5d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+/* 1. L'overlay de texte : plus imposant, fond plein et texte blanc */
+.feature-overlay {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #4d5d30; /* Le VERT du logo (fond plein) */
+    padding: 30px 45px;  /* Plus de rembourrage pour le rendre plus gros */
+    border-radius: 12px;
+    border: none;
+    z-index: 5;
+    text-align: center;  /* Texte bien centré */
+    min-width: 300px;    /* Largeur minimale augmentée */
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.feature-overlay h2 {
+    font-family: 'Playfair Display', serif;
+    margin: 0;
+    font-size: 2.2rem;   /* Titre beaucoup plus gros */
+    color: #ffffff;      /* Texte en blanc */
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+/* 2. Le Bouton "Explorer" avec feuilles plus subtiles */
+.btn-explorer {
+    position: absolute;
+    top: 65%; /* Ajusté légèrement pour ne pas coller à l'overlay plus gros */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #4e3524; /* Le BRUN du logo pour trancher avec le vert */
+    color: #f9f8f2;
+    text-decoration: none;
+    padding: 14px 40px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    z-index: 10;
+    transition: all 0.4s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* Feuilles avec opacité réduite (plus subtiles) */
+.btn-explorer::before {
+    content: "";
+    position: absolute;
+    left: -15px;
+    top: -5px;
+    width: 30px;
+    height: 30px;
+    background: #4d5d30;
+    opacity: 0.2; /* Opacité très faible pour un effet discret */
+    border-radius: 0 100% 0 100%;
+    transform: rotate(-15deg);
+    z-index: -1;
+    transition: all 0.4s ease;
+}
+
+.btn-explorer::after {
+    content: "";
+    position: absolute;
+    right: -15px;
+    bottom: -5px;
+    width: 25px;
+    height: 25px;
+    background: #4d5d30;
+    opacity: 0.2; /* Opacité très faible */
+    border-radius: 100% 0 100% 0;
+    transform: rotate(10deg);
+    z-index: -1;
+    transition: all 0.4s ease;
+}
+
+/* Animation au survol mise à jour */
+.btn-explorer:hover {
+    background: #6b7a54; /* Un vert plus clair au survol pour l'interaction */
+    transform: translate(-50%, -55%) scale(1.05);
+}
+
+/* Le cadre sobre pour la section boutique */
+.products-section {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 15px;
+    padding: 40px;
+    margin-bottom: 60px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+/* Grille réactive : finit les cartes géantes */
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 30px;
+}
+
+/* Style de la carte produit */
+.product-card {
+    background: transparent;
+    transition: transform 0.3s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+}
+
+.product-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 12px;
+    background-color: #eee;
+    margin-bottom: 15px;
+}
+
+.product-info {
+    text-align: center;
+}
+
+/* --- FOOTER GLOBAL --- */
+footer {
+    background: #586d32;
+    color: #f9f8f2;
+    padding: 80px 0 30px 0;
+    margin-top: 60px;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 80px;
+}
+
+/* --- LOGO ET NAV (GAUCHE) --- */
+.footer-brand {
+    flex: 0 0 350px; /* On élargit un peu la zone pour le logo */
+}
+
+.footer-logo-img {
+    width: 200px;    /* Augmentation de la taille (auparavant 120px) */
+    height: auto;
+    margin-bottom: 25px;
+    /* Suppression du filtre blanc pour garder les couleurs originales */
+    filter: none; 
+}
+
+.footer-nav {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 30px 0;
+}
+
+.footer-nav li {
+    margin-bottom: 12px;
+}
+
+.footer-nav a {
+    color: #f9f8f2;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    transition: opacity 0.3s;
+}
+
+.footer-nav a:hover { opacity: 0.6; }
+
+.footer-socials {
+    display: flex;
+    gap: 20px;
+}
+
+.social-link {
+    color: #f9f8f2;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(249, 248, 242, 0.3);
+    padding-bottom: 2px;
+}
+
+/* --- FORMULAIRE (DROITE) --- */
+.footer-contact {
+    flex: 1;
+}
+
+.footer-contact h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    margin-bottom: 5px;
+}
+
+.contact-subtitle {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    margin-bottom: 25px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.footer-contact input, 
+.footer-contact textarea {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(249, 248, 242, 0.4);
+    padding: 15px;
+    color: #f9f8f2;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+/* Fix pour la visibilité des placeholders */
+.footer-contact input::placeholder, 
+.footer-contact textarea::placeholder {
+    color: rgba(249, 248, 242, 0.8) !important;
+    font-weight: 400;
+}
+
+.btn-footer {
+    background: #4e3524;
+    color: #f9f8f2;
+    border: none;
+    padding: 15px 40px;
+    border-radius: 40px;
+    margin-top:15px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    transition: all 0.3s;
+}
+
+.btn-footer:hover {
+    background: #f9f8f2;
+    color: #4e3524;
+}
+
+.footer-bottom {
+    text-align: center;
+    margin-top: 80px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(249, 248, 242, 0.1);
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    opacity: 0.5;
+}
+
+/* --- SECTION INSTAGRAM --- */
+.instagram-section {
+    padding: 60px 0;
+    text-align: center;
+}
+
+.insta-header {
+    margin-bottom: 40px;
+}
+
+.insta-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    color: #4d5d30; /* Le VERT du logo */
+    margin: 0;
+}
+
+.insta-handle {
+    display: inline-block;
+    color: #4e3524; /* Le BRUN du logo */
+    text-decoration: none;
+    font-weight: 600;
+    letter-spacing: 2px;
+    font-size: 0.9rem;
+    margin-top: 10px;
+    border-bottom: 1px solid rgba(78, 53, 36, 0.3);
+    transition: opacity 0.3s;
+}
+
+.insta-handle:hover { opacity: 0.7; }
+
+/* NOUVEAU: Bandeau texte du slider public */
+.slide-banner {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(192, 192, 192, 0.212);
+    color: var(--accent-brown);
+    text-align: center;
+    padding: 15px 20px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-family: 'Playfair Display', serif;
+    box-sizing: border-box;
+    backdrop-filter: blur(5px);
+    color:black;
+}
+
+/* NOUVEAU: Styles du Panier Latéral */
+.cart-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(74, 66, 56, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 1003;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.cart-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+.cart-sidebar {
+    position: fixed;
+    top: 0; right: -400px; /* Caché par défaut en dehors de l'écran */
+    width: 100%; max-width: 400px; height: 100vh;
+    background: var(--primary-beige);
+    z-index: 1004;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.1);
+    transition: right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+.cart-sidebar.open {
+    right: 0;
+}
+
+.cart-header {
+    padding: 25px 20px;
+    background: var(--soft-white);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cart-header h2 {
+    margin: 0;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+}
+
+.close-cart {
+    background: none; border: none;
+    font-size: 2rem; cursor: pointer; color: var(--accent-brown);
+}
+
+.cart-items {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.cart-item {
+    display: flex; gap: 15px; margin-bottom: 20px;
+    background: var(--soft-white); padding: 10px; border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.cart-item img {
+    width: 80px; height: 80px; object-fit: cover; border-radius: 6px;
+}
+
+.cart-item-details {
+    flex: 1; display: flex; flex-direction: column; justify-content: space-between;
+}
+
+.cart-item-title {
+    font-weight: 600; font-size: 0.95rem; margin: 0 0 5px 0;
+}
+
+.cart-item-price {
+    color: #4d5d30; font-weight: 600;
+}
+
+.cart-qty-controls {
+    display: flex; align-items: center; gap: 10px; margin-top: 5px;
+}
+
+.cart-qty-controls button {
+    background: #f0f0f0; border: none; width: 25px; height: 25px;
+    border-radius: 4px; cursor: pointer; font-weight: bold; color: var(--accent-brown);
+}
+
+.cart-footer {
+    padding: 20px; background: var(--soft-white);
+    border-top: 1px solid var(--border-light);
+}
+
+.cart-total {
+    display: flex; justify-content: space-between;
+    font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;
+}
+
+.btn-checkout {
+    width: 100%; background: var(--accent-brown); color: white;
+    padding: 15px; border: none; border-radius: 8px;
+    font-size: 1rem; font-weight: 600; cursor: pointer; letter-spacing: 1px;
+    transition: opacity 0.3s;
+}
+
+.btn-checkout:hover { opacity: 0.9; }
+
+
+
+
+
+
+
+
+
+/* ========================================= */
+/* NOUVEAU: STYLES RESPONSIVE (MOBILE & TAB) */
+/* ========================================= */
+
+/* Cacher le hamburger sur PC */
+@media (min-width: 769px) {
+    .hamburger-btn {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    /* --- NAVBAR & MENU HAMBURGER --- */
+    .nav-container {
+        padding: 0 20px;
+    }
+
+    .hamburger-btn {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        width: 30px;
+        height: 25px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        z-index: 1002; /* Au-dessus du menu */
+        margin-left: auto;
+        margin-right: 20px;
+    }
+
+    .hamburger-btn span {
+        width: 100%;
+        height: 3px;
+        background: var(--accent-brown);
+        border-radius: 5px;
+        transition: all 0.3s linear;
+    }
+
+    /* NOUVEAU: Centrage ajusté pour une croix géométrique parfaite */
+    .hamburger-btn.active span:nth-child(1) { transform: translateY(11px) rotate(45deg); }
+    .hamburger-btn.active span:nth-child(2) { opacity: 0; }
+    .hamburger-btn.active span:nth-child(3) { transform: translateY(-11px) rotate(-45deg); }
+
+    .nav-links {
+        position: fixed;
+        /* S'ajuste dynamiquement sous la navbar. ~80px selon ta hauteur de header */
+        top: 85px; 
+        right: -100%; /* Caché par défaut */
+        width: 100%;
+        height: calc(100vh - 85px); /* Prend le reste de la page */
+        background-color: var(--primary-beige);
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 50px;
+        transition: right 0.4s ease-in-out;
+        z-index: 1001;
+        overflow-y: auto;
+    }
+
+    .nav-links.open {
+        right: 0; /* Fait glisser le menu dans la vue */
+    }
+
+    .nav-links li {
+        margin: 15px 0;
+        font-size: 1.2rem;
+    }
+
+    .nav-icons {
+        margin-left: 0;
+    }
+
+    /* NOUVEAU : Centrer et mettre en valeur le titre parent "BOUTIQUE" */
+    .dropdown {
+        width: 100%;
+        text-align: center;
+    }
+
+    .dropdown > a {
+        font-size: 1.5rem;
+        font-weight: 700;
+        display: block;
+        margin-bottom: 10px;
+    }
+
+    /* Menu Boutique toujours ouvert et fusionné sur mobile */
+    .dropdown-content {
+        position: static;
+        display: block !important; 
+        box-shadow: none;
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: center;
+        margin-top: 10px;
+        padding: 0;
+    }
+
+    .dropdown-content li {
+        margin: 15px 0;
+    }
+    
+    .dropdown-content a {
+        font-size: 1rem;
+        opacity: 0.8; 
+    }
+
+    .dropdown-subtitle {
+        margin-top: 25px;
+        font-size: 1.1rem;
+    }
+
+    .dropdown-divider {
+        display: none;
+    }
+
+    /* --- RESTE DU SITE (GRILLES & COMPOSANTS) --- */
+    
+    .hero-slider {
+        width: 100%;
+        border-radius: 0;
+        margin: 0;
+        aspect-ratio: 4 / 3; /* Un poil plus vertical sur mobile */
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+        padding: 0 10px;
+    }
+
+    .feature-overlay {
+        min-width: 80%;
+        padding: 20px 30px;
+    }
+
+    .feature-overlay h2 {
+        font-size: 1.6rem;
+    }
+
+    .product-details-container {
+        grid-template-columns: 1fr !important;
+        gap: 20px !important;
+    }
+
+    .shop-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .shop-controls input, 
+    .shop-controls select {
+        width: 100% !important;
+    }
+
+    /* Footer Responsive */
+    .footer-container {
+        flex-direction: column;
+        gap: 40px;
+        text-align: center;
+    }
+
+    .footer-brand {
+        flex: auto;
+    }
+
+    .footer-socials {
+        justify-content: center;
+    }
+
+    .footer-contact h3 {
+        font-size: 1.5rem;
+    }
+
+    .form-row {
+        flex-direction: column;
+    }
+}
+

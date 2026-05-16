@@ -1,0 +1,323 @@
+/* Variables et thèmes */
+:root {
+    --primary-beige: #f9f8f2;
+    --accent-brown: #4a4238;
+    --white: #ffffff;
+    --border-color: #e0ddd5;
+    --success-green: #6d8c6d;
+    --error-red: #a35d5d;
+    --input-bg: #fff;
+}
+
+.admin-body {
+    background-color: var(--primary-beige);
+    color: var(--accent-brown);
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Navigation Admin */
+.admin-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--white);
+    padding: 15px 40px;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+}
+
+.admin-nav .logo {
+    font-weight: 600;
+    letter-spacing: 2px;
+}
+
+/* Conteneur Principal */
+.admin-container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+.admin-section {
+    background: var(--white);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 30px;
+}
+
+.admin-section h2 {
+    font-family: 'Playfair Display', serif;
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+}
+
+/* Formulaire Produit */
+.product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    gap: 15px;
+}
+
+.form-group input, .form-group select {
+    flex: 1;
+}
+
+input, select, textarea {
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--accent-brown);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent-brown);
+}
+
+.file-input-area {
+    background: #fafafa;
+    border: 2px dashed var(--border-color);
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.file-input-area label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* Boutons */
+.btn-buy {
+    background: var(--accent-brown);
+    color: var(--white);
+    border: none;
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    letter-spacing: 1px;
+}
+
+.btn-buy:hover {
+    opacity: 0.9;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--accent-brown);
+    color: var(--accent-brown);
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+/* Inventaire */
+.inventory-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.inventory-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.inventory-item:last-child {
+    border-bottom: none;
+}
+
+.inventory-item span {
+    font-size: 0.95rem;
+}
+
+.inventory-item button {
+    font-weight: 600;
+    font-size: 0.8rem;
+    transition: transform 0.1s;
+}
+
+.inventory-item button:hover {
+    transform: scale(1.05);
+}
+
+/* Messages de statut */
+#uploadStatus {
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Style des boutons d'onglets */
+.admin-tabs {
+    display: flex;
+    gap: 10px;
+    margin: 0 20px;
+}
+
+.tab-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--accent-brown);
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+    background: #efeee7;
+}
+
+.tab-btn.active {
+    background: var(--accent-brown);
+    color: white;
+    border-color: var(--accent-brown);
+}
+
+.btn-logout {
+    background: transparent;
+    color: #a35d5d;
+    border: 1px solid #a35d5d;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-logout:hover {
+    background: #a35d5d;
+    color: white;
+}
+
+/* NOUVEAU: Styles de la modale Slider */
+.modal {
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: var(--white);
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+}
+
+.close-modal {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--accent-brown);
+}
+
+/* NOUVEAU : Design du tableau de bord des commandes structuré */
+.order-card {
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.order-card-header {
+    background: #f0eee7;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.order-id {
+    font-weight: 600;
+    color: var(--accent-brown);
+    margin-right: 15px;
+}
+
+.order-date {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.status-select {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-color: var(--accent-brown);
+}
+
+.order-card-body {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.order-col h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #777;
+}
+
+.order-col ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.95rem;
+}
+
+.order-price-total {
+    margin-top: 15px;
+    font-size: 1rem;
+}
+
+.order-address-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.order-contact-email {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+@media (max-width: 600px) {
+    .order-card-body {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}

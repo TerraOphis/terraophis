@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boutique | Terraophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar">
+    </nav>
+
+    <main class="container">
+        <header class="shop-header" style="margin: 40px 0; text-align: center;">
+            <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem;">La Boutique</h1>
+            
+            <div class="shop-controls" style="display: flex; gap: 20px; justify-content: center; margin-top: 30px; flex-wrap: wrap;">
+            <input type="text" id="shopSearch" placeholder="Rechercher un insecte..." style="padding: 12px 20px; border-radius: 30px; border: 1px solid var(--border-light); width: 300px;">
+            
+            <select id="categoryFilter" style="padding: 12px 20px; border-radius: 30px; border: 1px solid var(--border-light); background: white;">
+                <option value="all">Toutes les catégories</option>
+                <option value="cloportes">Isopodes</option>
+                <option value="iules">Iules</option>
+                <option value="coleopteres">Coléoptères</option>
+                <option value="mantes">Mantes</option>
+                <option value="phasmes">Phasmes</option>
+                <option value="accessoires">Accessoires</option>
+                <option value="offres">Offres Spéciales</option>
+            </select>
+
+            <select id="shopSort" style="padding: 12px 20px; border-radius: 30px; border: 1px solid var(--border-light); background: white;">
+                <option value="newest">Nouveautés</option>
+                <option value="price-asc">Prix : Croissant</option>
+                <option value="price-desc">Prix : Décroissant</option>
+                <option value="name-asc">Nom : A-Z</option>
+            </select>
+        </div>
+        </header>
+
+        <section class="products-section">
+            <div id="productGrid" class="product-grid"></div>
+        </section>
+        <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer">
+            </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+    </main>
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

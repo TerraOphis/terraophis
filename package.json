@@ -1,0 +1,26 @@
+{
+  "name": "terraophis",
+  "version": "1.0.0",
+  "description": "Boutique de terrariophilie",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1041.0",
+    "archiver": "^7.0.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.8.0",
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.7",
+    "sharp": "^0.34.5",
+    "stripe": "^22.1.0"
+  }
+}

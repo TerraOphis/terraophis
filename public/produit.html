@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terraophis | Boutique d'insectes</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar">
+    </nav>
+
+    <main class="container">
+        <div class="back-link-container" style="margin: 20px 0;">
+            <a href="index.html#boutique" style="color: var(--accent-brown); text-decoration: none; font-weight: 600;">← Retour à la boutique</a>
+        </div>
+
+        <section id="productDetails" class="product-details-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 50px;">
+            <p>Chargement du produit...</p>
+        </section>
+    </main>
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer">
+            </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

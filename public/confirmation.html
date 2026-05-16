@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commande validée | Terraophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+    <style>
+        .confirmation-container {
+            text-align: center;
+            padding: 100px 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .confirmation-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <main class="confirmation-container">
+        <div class="confirmation-icon">🌿✨</div>
+        <h1 style="font-family: 'Playfair Display', serif; color: var(--accent-brown); font-size: 2.5rem; margin-bottom: 10px;">Merci pour votre commande !</h1>
+        <p style="font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px;">
+            Votre paiement a bien été validé. Nous préparons vos spécimens avec le plus grand soin. Vous recevrez très bientôt un e-mail avec les détails de l'expédition.
+        </p>
+        <a href="/" class="btn-buy" style="text-decoration: none; display: inline-block; padding: 15px 40px; border-radius: 50px;">RETOURNER À LA BOUTIQUE</a>
+    </main>
+
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+    <script>
+        // NOUVEAU : On vide le panier local puisque la commande est payée
+        localStorage.removeItem('terraophis_cart');
+        localStorage.removeItem('terraophis_cart_total');
+    </script>
+</body>
+</html>
