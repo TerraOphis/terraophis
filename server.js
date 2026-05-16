@@ -636,7 +636,15 @@ app.post('/api/delete-order-document', verifyAdmin, async (req, res) => {
     }
 });
 
-// 5. Allumage du serveur
-app.listen(PORT, () => {
-    console.log(`✅ Serveur démarré avec succès sur http://localhost:${PORT}`);
-});
+// //////////////////////////////////////////////////
+// 5. INITIALISATION ET ALLUMAGE SÉCURISÉ
+// //////////////////////////////////////////////////
+
+// On enveloppe l'écoute du serveur pour éviter que Hostinger ne reçoive une erreur 503 vide
+try {
+    app.listen(PORT, () => {
+        console.log(`✅ Serveur Terraophis démarré avec succès sur le port ${PORT}`);
+    });
+} catch (error) {
+    console.error("❌ Erreur critique lors du lancement du serveur Express :", error);
+}
