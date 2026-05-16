@@ -10,7 +10,11 @@
 </head>
 <body class="beige-theme admin-body">
 
-    <nav class="admin-nav">
+    <div id="adminLoader" style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--accent-brown);">
+        Vérification des droits d'accès... 🛡️
+    </div>
+
+    <nav class="admin-nav" id="adminNav" style="display: none;">
         <div class="logo">TERRAOPHIS <span style="font-size: 0.7rem; color: #888;">PANEL ADMIN</span></div>
         
         <div class="admin-tabs">
@@ -23,7 +27,7 @@
         <button id="btnLogout" class="btn-logout">Déconnexion</button>
     </nav>
 
-    <main class="admin-container">
+    <main class="admin-container" id="adminMain" style="display: none;">
         
         <div id="tab-stocks" class="tab-content">
             <section class="admin-section">

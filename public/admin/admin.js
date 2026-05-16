@@ -9,31 +9,35 @@ const statusMsg = document.getElementById('uploadStatus');
 
 // --- SÉCURITÉ & AUTHENTIFICATION ---
 
+// --- SÉCURITÉ & AUTHENTIFICATION ---
+
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        // L'utilisateur est connecté, on vérifie si c'est le bon email
-        if (user.email === "martin.stuis11@gmail.com") {
+        // L'utilisateur est connecté, on vérifie si c'est l'un des bons emails
+        if (user.email === "martin.stuis11@gmail.com" || user.email === "terra.ophis@gmail.com") {
             console.log("Accès Admin accordé :", user.email);
+            
+            // NOUVEAU : On lève le rideau de fer uniquement si l'accès est validé
+            document.getElementById('adminLoader').style.display = 'none';
+            document.getElementById('adminNav').style.display = 'flex';
+            document.getElementById('adminMain').style.display = 'block';
+
             loadInventory(); 
-            // NOUVEAU : Chargement des commandes à la connexion
             loadOrders();
             loadSliderPreview();
             loadGridPreviews();
         } else {
-            // Connecté mais pas avec le bon compte
             console.warn("Accès refusé pour :", user.email);
-            // NOUVEAU : Redirection vers l'URL propre
-            window.location.href = "/login?error=forbidden";
+            // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
+            window.location.replace("/connexion.html");
         }
     } else {
-        // Pas de session trouvée, on attend un tout petit peu ou on redirige
-        // Firebase a besoin d'un instant pour vérifier le cache local
         setTimeout(() => {
             if (!auth.currentUser) {
-                // NOUVEAU : Redirection vers l'URL propre
-                window.location.href = "/login";
+                // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
+                window.location.replace("/connexion.html");
             }
-        }, 1000); // On laisse 1 seconde de battement
+        }, 1000); 
     }
 });
 

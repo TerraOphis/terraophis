@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vérification de la commande | Terraophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <main class="container">
+        <div class="checkout-wrapper">
+            
+            <div>
+                <form id="checkoutForm">
+                    <div class="checkout-step">
+                        <h2><span class="checkout-step-number">1</span> Adresse de livraison</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <input type="text" id="chkName" placeholder="Prénom et Nom" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <input type="text" id="chkLine1" placeholder="Adresse (N°, rue...)" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <input type="text" id="chkLine2" placeholder="Appartement, bâtiment (Optionnel)" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+                                <input type="text" id="chkPostal" placeholder="Code postal" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                                <input type="text" id="chkCity" placeholder="Ville" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            </div>
+                            <select id="chkCountry" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white;">
+                                <option value="FR">France</option>
+                                <option value="BE">Belgique</option>
+                                <option value="CH">Suisse</option>
+                                <option value="LU">Luxembourg</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="checkout-step">
+                        <h2><span class="checkout-step-number">2</span> Paiement sécurisé</h2>
+                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 20px;">
+                            Vous allez être redirigé vers l'interface de paiement cryptée et sécurisée de notre partenaire Stripe.
+                        </p>
+                        <label style="display: flex; gap: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin-bottom: 20px; align-items: flex-start;">
+                            <input type="checkbox" required style="margin-top: 3px;">
+                            <span>Je m'engage à fournir des conditions de vie adaptées au bien-être de l'animal et certifie avoir pris connaissance des fiches conseils.</span>
+                        </label>
+                        
+                        <button type="submit" id="btnFinalPay" class="btn-buy" style="width: 100%; font-size: 1.1rem; padding: 18px;">PAYER MA COMMANDE</button>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <div class="checkout-summary">
+                    <h2 style="font-family: 'Playfair Display', serif; margin-top: 0;">Résumé</h2>
+                    <div id="checkoutItems">
+                        <p>Chargement du panier...</p>
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem; color: #666;">
+                            <span>Sous-total</span>
+                            <span id="chkSubtotal">0.00 €</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: #666;">
+                            <span>Frais de port (Vivant / Isotherme)</span>
+                            <span id="chkShipping">9.90 €</span>
+                        </div>
+                        <div class="summary-total">
+                            <span>TOTAL</span>
+                            <span id="chkTotal">0.00 €</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+    <script type="module">
+        import { auth, db } from './firebase-config.js';
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { doc, getDoc, collection, addDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const SHIPPING_COST = 9.90;
+        let cart = [];
+        let subtotal = 0;
+
+        // Vérification de sécurité et chargement des données
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = '/connexion.html';
+                return;
+            }
+
+            cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+            subtotal = parseFloat(localStorage.getItem('terraophis_cart_total') || 0);
+
+            if (cart.length === 0 || subtotal <= 0) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Pré-remplissage du formulaire
+            document.getElementById('chkName').value = user.displayName || '';
+            const userSnap = await getDoc(doc(db, "users", user.uid));
+            if (userSnap.exists() && userSnap.data().address) {
+                const addr = userSnap.data().address;
+                document.getElementById('chkLine1').value = addr.line1 || '';
+                document.getElementById('chkLine2').value = addr.line2 || '';
+                document.getElementById('chkPostal').value = addr.postalCode || '';
+                document.getElementById('chkCity').value = addr.city || '';
+                document.getElementById('chkCountry').value = addr.country || 'FR';
+            }
+
+            // Rendu du résumé
+            const container = document.getElementById('checkoutItems');
+            let html = '';
+            for (let i = 0; i < cart.length; i++) {
+                const pSnap = await getDoc(doc(db, "products", cart[i].id));
+                const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
+                const price = pSnap.exists() ? (pSnap.data().price * cart[i].quantity).toFixed(2) : 0;
+                html += `
+                    <div class="summary-item">
+                        <span><strong>x${cart[i].quantity}</strong> ${name}</span>
+                        <span>${price} €</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+
+            document.getElementById('chkSubtotal').textContent = subtotal.toFixed(2) + ' €';
+            document.getElementById('chkTotal').textContent = (subtotal + SHIPPING_COST).toFixed(2) + ' €';
+        });
+
+        // Validation finale et envoi vers Stripe
+        document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnFinalPay');
+            btn.disabled = true;
+            btn.textContent = 'CONNEXION SÉCURISÉE... ⏳';
+
+            const user = auth.currentUser;
+            const totalWithShipping = subtotal + SHIPPING_COST;
+
+            // Capture de l'adresse saisie
+            const shippingAddress = {
+                line1: document.getElementById('chkLine1').value,
+                line2: document.getElementById('chkLine2').value,
+                postalCode: document.getElementById('chkPostal').value,
+                city: document.getElementById('chkCity').value,
+                country: document.getElementById('chkCountry').value
+            };
+
+            try {
+                // Optionnel : on sauvegarde discrètement l'adresse dans le profil du client
+                await setDoc(doc(db, "users", user.uid), { address: shippingAddress }, { merge: true });
+
+                // 1. Création de la commande dans Firestore
+                const orderRef = await addDoc(collection(db, "orders"), {
+                    userId: user.uid,
+                    customerEmail: user.email,
+                    customerName: document.getElementById('chkName').value,
+                    items: cart,
+                    amountValue: totalWithShipping, // Le serveur prendra ce total incluant les frais
+                    shippingCost: SHIPPING_COST,
+                    status: 'En attente de paiement',
+                    shippingAddress: shippingAddress,
+                    createdAt: serverTimestamp()
+                });
+
+                // 2. Appel au serveur pour Stripe
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        orderId: orderRef.id,
+                        userEmail: user.email
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    throw new Error(data.error || "Erreur de connexion à Stripe");
+                }
+
+            } catch (error) {
+                console.error("Erreur Checkout :", error);
+                alert("Une erreur est survenue.");
+                btn.disabled = false;
+                btn.textContent = 'PAYER MA COMMANDE';
+            }
+        });
+    </script>
+</body>
+</html>

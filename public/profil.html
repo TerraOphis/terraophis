@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Espace Client | Terraophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+    <style>
+        .profile-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 50px;
+            margin-bottom: 80px;
+        }
+        .profile-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+        }
+        .profile-box h2 {
+            font-family: 'Playfair Display', serif;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: var(--accent-brown);
+        }
+        .form-address {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .form-address input, .form-address select {
+            padding: 12px;
+            border: 1px solid rgba(74, 66, 56, 0.2);
+            border-radius: 6px;
+            font-family: inherit;
+        }
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .btn-logout-client {
+            background: transparent;
+            border: 1px solid #a35d5d;
+            color: #a35d5d;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-top: 15px;
+        }
+        @media (max-width: 768px) {
+            .profile-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <main class="container">
+        <div class="profile-layout">
+            
+            <div class="profile-box">
+                <h2>Mes Informations</h2>
+                <div class="user-badge">
+                    <div style="background: #e0ddd5; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">👤</div>
+                    <div>
+                        <strong id="user-name" style="font-size: 1.1rem;">...</strong><br>
+                        <span id="user-email" style="color: #777; font-size: 0.9rem;">...</span>
+                    </div>
+                </div>
+
+                <h2>Adresse de livraison par défaut</h2>
+                <form id="addressForm" class="form-address">
+                    <input type="text" id="line1" placeholder="Adresse (N°, rue...)" required>
+                    <input type="text" id="line2" placeholder="Appartement, bâtiment, étage (Optionnel)">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+                        <input type="text" id="postalCode" placeholder="Code postal" required>
+                        <input type="text" id="city" placeholder="Ville" required>
+                    </div>
+                    <select id="country" required>
+                        <option value="FR">France</option>
+                        <option value="BE">Belgique</option>
+                        <option value="CH">Suisse</option>
+                        <option value="LU">Luxembourg</option>
+                    </select>
+                    <button type="submit" class="btn-buy">ENREGISTRER L'ADRESSE</button>
+                </form>
+
+                <button onclick="window.logoutCustomer()" class="btn-logout-client">Se déconnecter</button>
+            </div>
+
+            <div class="profile-box">
+                <h2>Historique de mes commandes</h2>
+                <div id="ordersHistory">
+                    <p>Chargement de vos commandes...</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+    <script type="module">
+        import { auth, db } from './firebase-config.js';
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = '/'; 
+                return;
+            }
+
+            document.getElementById('user-name').textContent = user.displayName;
+            document.getElementById('user-email').textContent = user.email;
+
+            // Récupération de l'adresse enregistrée
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists() && userDoc.data().address) {
+                const addr = userDoc.data().address;
+                document.getElementById('line1').value = addr.line1 || '';
+                document.getElementById('line2').value = addr.line2 || '';
+                document.getElementById('postalCode').value = addr.postalCode || '';
+                document.getElementById('city').value = addr.city || '';
+                document.getElementById('country').value = addr.country || 'FR';
+            }
+
+            // Chargement de l'historique
+            loadCustomerOrders(user.uid);
+        });
+
+        document.getElementById('addressForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const btn = e.target.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = 'Enregistrement... ⏳';
+
+            const address = {
+                line1: document.getElementById('line1').value,
+                line2: document.getElementById('line2').value,
+                postalCode: document.getElementById('postalCode').value,
+                city: document.getElementById('city').value,
+                country: document.getElementById('country').value
+            };
+
+            try {
+                await setDoc(doc(db, "users", user.uid), { address }, { merge: true });
+                alert("Adresse enregistrée avec succès ! 📦");
+            } catch (err) {
+                console.error(err);
+                alert("Erreur lors de l'enregistrement.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'ENREGISTRER L\'ADRESSE';
+            }
+        });
+
+        async function loadCustomerOrders(uid) {
+            const container = document.getElementById('ordersHistory');
+            try {
+                const q = query(collection(db, "orders"), where("userId", "==", uid), orderBy("createdAt", "desc"));
+                const snap = await getDocs(q);
+
+                if (snap.empty) {
+                    container.innerHTML = '<p style="color: #777;">Vous n\'avez pas encore passé de commande.</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                for (const orderDoc of snap.docs) {
+                    const order = orderDoc.data();
+                    const date = order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('fr-FR') : 'Inconnue';
+                    
+                    let itemsHtml = '';
+                    if (order.items) {
+                        for (const item of order.items) {
+                            const pSnap = await getDoc(doc(db, "products", item.id));
+                            const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
+                            itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}</li>`;
+                        }
+                    }
+
+                    // NOUVEAU : Création dynamique de badges de couleur selon le statut
+                    let badgeColor = '#888';
+                    let badgeText = order.status || 'Inconnu';
+                    
+                    if (badgeText === 'En attente de paiement') badgeColor = '#e67e22'; 
+                    else if (badgeText === 'Payé' || badgeText === 'En préparation') badgeColor = '#3498db'; 
+                    else if (badgeText === 'Expédié') badgeColor = '#2ecc71'; 
+
+                    const div = document.createElement('div');
+                    div.style.cssText = "background: var(--primary-beige); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-light);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.85rem; color:#666; align-items: center;">
+                            <span>Commande du <strong>${date}</strong></span>
+                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px;">${badgeText.toUpperCase()}</span>
+                        </div>
+                        <ul style="margin:0 0 15px 0; padding-left:20px; font-size:0.9rem; line-height:1.4;">${itemsHtml}</ul>
+                        <div style="text-align:right; font-weight:600; font-size:1rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 10px;">
+                            Total : ${order.amountValue ? order.amountValue.toFixed(2) : 0} €
+                        </div>
+                    `;
+                    container.appendChild(div);
+                }
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<p>Erreur lors du chargement de l\'historique.</p>';
+            }
+        }
+        window.logoutCustomer = () => {
+            signOut(auth).then(() => { window.location.href = '/'; });
+        };
+    </script>
+</body>
+</html>

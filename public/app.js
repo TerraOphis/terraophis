@@ -1,7 +1,50 @@
-import { db } from './firebase-config.js';
-import { collection, query, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { db, auth } from './firebase-config.js';
+import { collection, query, getDocs, orderBy, doc, getDoc, addDoc, setDoc, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 let allProducts = []; // Stockage local pour filtrer sans requêter Firebase en boucle
+
+// NOUVEAU : Gestion de l'état de connexion client et injection de l'icône de profil
+// NOUVEAU : Mise à jour dynamique du bouton de la navbar selon l'état
+window.updateNavAuthUI = (user) => {
+    const authBtn = document.getElementById('nav-auth-btn');
+    if (!authBtn) return; 
+
+    if (user) {
+        // NOUVEAU : Si connecté, on met l'icône profil (verte) vers la page profil
+        authBtn.href = '/profil.html';
+        authBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#586d32" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    } else {
+        // NOUVEAU : Si déconnecté, on remet le texte Connexion
+        authBtn.href = '/connexion.html';
+        authBtn.innerHTML = `Connexion`;
+    }
+};
+
+onAuthStateChanged(auth, (user) => {
+    window.updateNavAuthUI(user);
+});
+
+// NOUVEAU : Logique de connexion Google Pop-up
+window.loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+        const result = await signInWithPopup(auth, provider);
+        
+        // Sauvegarde ou mise à jour automatique des infos de base dans Firestore
+        await setDoc(doc(db, "users", result.user.uid), {
+            name: result.user.displayName,
+            email: result.user.email,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        
+        alert(`Ravi de vous revoir, ${result.user.displayName} ! 🌿`);
+        window.location.reload();
+    } catch (error) {
+        console.error("Erreur d'authentification Google :", error);
+        alert("Impossible de finaliser la connexion Google.");
+    }
+};
 
 async function loadCatalogue() {
     const productGrid = document.getElementById('productGrid');
@@ -236,46 +279,21 @@ window.toggleCart = (forceOpen = false) => {
 };
 
 window.processCheckout = async () => {
-    const btn = document.getElementById('btnCheckout');
     const cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
     const totalValue = parseFloat(localStorage.getItem('terraophis_cart_total') || 0);
 
     if (cart.length === 0 || totalValue <= 0) return;
 
-    try {
-        btn.disabled = true;
-        btn.textContent = 'PRÉPARATION... ⏳';
-
-        // 1. Création de la commande "En attente" dans Firestore
-        const orderRef = await addDoc(collection(db, "orders"), {
-            items: cart,
-            amountValue: totalValue,
-            status: 'En attente de paiement',
-            createdAt: serverTimestamp()
-        });
-
-        // 2. Appel au serveur pour générer la session Stripe
-        const response = await fetch('/api/create-checkout-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId: orderRef.id })
-        });
-
-        const data = await response.json();
-
-        if (data.url) {
-            // Redirection vers la page de paiement sécurisée Stripe
-            window.location.href = data.url;
-        } else {
-            throw new Error(data.error || "Erreur de connexion à Stripe");
-        }
-
-    } catch (error) {
-        console.error("Erreur Checkout :", error);
-        alert("Une erreur est survenue lors de la création de la commande.");
-        btn.disabled = false;
-        btn.textContent = 'VALIDER LA COMMANDE';
+    // Vérification de la session client avant redirection
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Veuillez vous connecter pour valider votre panier 🌿");
+        window.location.href = '/connexion.html';
+        return;
     }
+
+    // Redirection vers la page de paiement détaillée (Checkout)
+    window.location.href = '/checkout.html';
 };
 
 async function loadHeroSlider() {
@@ -531,17 +549,19 @@ async function loadNavbar() {
             });
         }
 
-        // AJOUT : Ciblage des éléments dropdown manquants pour corriger la ReferenceError
         const dropdowns = navElement.querySelectorAll('.dropdown');
-
         dropdowns.forEach(dropdown => {
             dropdown.addEventListener('click', (e) => {
-                // Sur mobile, cliquer sur "BOUTIQUE" ouvre le sous-menu au lieu de rediriger direct
                 if (window.innerWidth <= 768) {
                     dropdown.classList.toggle('active-mobile');
                 }
             });
         });
+
+        // NOUVEAU : On applique l'état de session dès que la navbar est injectée dans la page
+        if (typeof window.updateNavAuthUI === 'function') {
+            window.updateNavAuthUI(auth.currentUser);
+        }
 
     } catch (error) {
         console.error("Erreur lors du chargement de la navbar :", error);

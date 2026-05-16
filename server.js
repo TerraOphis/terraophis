@@ -16,26 +16,22 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // 🛡️ MIDDLEWARE DE SÉCURITÉ ADMIN
 // //////////////////////////////////////////////////
 const verifyAdmin = async (req, res, next) => {
-    // 1. On vérifie si un token est présent dans l'en-tête de la requête
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: "Accès refusé : Token d'authentification manquant." });
     }
 
-    // 2. On extrait le token (en enlevant le mot "Bearer ")
     const idToken = authHeader.split('Bearer ')[1];
 
     try {
-        // 3. On demande à Firebase de vérifier si le token est authentique et non expiré
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         
-        // 4. VÉRIFICATION ULTIME : Est-ce que c'est bien Martin ?
-        if (decodedToken.email !== "martin.stuis11@gmail.com") {
+        // Blocage si l'e-mail décodé n'appartient à aucun des deux administrateurs configurés
+        if (decodedToken.email !== "martin.stuis11@gmail.com" && decodedToken.email !== "terra.ophis@gmail.com") {
             console.warn(`Tentative d'accès non autorisé par : ${decodedToken.email}`);
             return res.status(403).json({ error: "Accès interdit : Droits administrateur requis." });
         }
 
-        // Si tout est bon, on laisse passer la requête à la suite du code
         req.user = decodedToken;
         next(); 
     } catch (error) {
