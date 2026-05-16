@@ -108,6 +108,22 @@
         </div>
     </main>
 
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer">
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
     <footer id="main-footer"></footer>
 
     <script type="module" src="app.js"></script>

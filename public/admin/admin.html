@@ -61,7 +61,15 @@
                         </select>
                     </div>
                     <textarea name="description" placeholder="Description de l'espèce..." rows="4" required></textarea>
-                    <textarea name="careGuide" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)" rows="4"></textarea>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                        </div>
+                        <div id="productCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)"></div>
+                    </div>
                     
                     <div class="file-input-area">
                         <label for="productFiles">Photos du produit (Max 5)</label>
@@ -141,14 +149,61 @@
         </div>
         
         <div id="sliderModal" class="modal" style="display:none;">
-            <div class="modal-content">
-                <span class="close-modal" onclick="closeSliderModal()">&times;</span>
-                <h2>Paramètres de l'image</h2>
-                <form id="sliderModalForm" class="product-form">
-                    <input type="hidden" id="modalSlideIndex">
-                    <input type="text" id="modalSlideLink" placeholder="Lien (ex: /boutique?cat=mantes)">
-                    <input type="text" id="modalSlideText" placeholder="Texte affiché en bas de l'image">
-                    <button type="submit" class="btn-buy">ENREGISTRER</button>
+            </div>
+        </div>
+
+        <div id="editProductModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <span class="close-modal" onclick="closeEditModal()">&times;</span>
+                <h2>Modifier le produit</h2>
+                
+                <div id="editPhotosPreview" class="edit-photos-grid">
+                    </div>
+
+                <form id="editProductForm" class="product-form">
+                    <input type="hidden" id="editProductId">
+                    <div class="form-group">
+                        <input type="text" name="name" id="editName" placeholder="Nom commun" required>
+                        <input type="text" name="latinName" id="editLatinName" placeholder="Nom latin" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="number" name="price" id="editPrice" placeholder="Prix à l'unité" step="0.01">
+                        <input type="number" name="price5" id="editPrice5" placeholder="Prix Lot de 5" step="0.01">
+                        <input type="number" name="price10" id="editPrice10" placeholder="Prix Lot de 10" step="0.01">
+                        <input type="number" name="stock" id="editStock" placeholder="Quantité en stock" required>
+                    </div>
+                    <div class="form-group">
+                        <select name="category" id="editCategory" required>
+                            <option value="cloportes">Isopodes (Cloportes)</option>
+                            <option value="iules">Iules</option>
+                            <option value="coleopteres">Coléoptères</option>
+                            <option value="mantes">Mantes</option>
+                            <option value="phasmes">Phasmes</option>
+                            <option value="accessoires">Accessoires</option>
+                        </select>
+                        <select name="difficulty" id="editDifficulty" required>
+                            <option value="debutant">Débutant</option>
+                            <option value="intermediaire">Intermédiaire</option>
+                            <option value="expert">Expert</option>
+                        </select>
+                    </div>
+                    <textarea name="description" id="editDescription" placeholder="Description de l'espèce..." rows="4" required></textarea>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                        </div>
+                        <div id="editCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire..."></div>
+                    </div>
+                    
+                    <div class="file-input-area">
+                        <label for="editProductFiles">Ajouter de nouvelles photos</label>
+                        <input type="file" id="editProductFiles" multiple accept="image/*">
+                    </div>
+                    <button type="submit" id="btnSubmitEdit" class="btn-buy">METTRE À JOUR LE PRODUIT</button>
+                    <p id="editUploadStatus" style="text-align: center; font-weight: 500;"></p>
                 </form>
             </div>
         </div>

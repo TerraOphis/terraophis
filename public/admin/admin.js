@@ -2,8 +2,6 @@ import { db, auth } from '../firebase-config.js';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, getDoc, setDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-
-let editProductId = null;
 const productForm = document.getElementById('productForm');
 const statusMsg = document.getElementById('uploadStatus');
 
@@ -70,7 +68,11 @@ productForm.addEventListener('submit', async (e) => {
             photoUrls = uploadedFiles.map(f => f.url);
         }
 
-        // NOUVEAU : Prise en compte des nouveaux champs de prix et guide
+        if (photoUrls.length === 0) throw new Error("Les photos sont obligatoires pour un nouveau produit.");
+
+        // Nouveau : Lecture du contenu textuel stylisé (HTML) généré par l'éditeur
+        const careGuideHtml = document.getElementById('productCareGuideEditor').innerHTML;
+
         const productData = {
             name: formData.get('name'),
             latinName: formData.get('latinName'),
@@ -81,29 +83,16 @@ productForm.addEventListener('submit', async (e) => {
             category: formData.get('category'),
             difficulty: formData.get('difficulty'),
             description: formData.get('description'),
-            careGuide: formData.get('careGuide') || ''
+            careGuide: careGuideHtml,
+            photos: photoUrls,
+            createdAt: serverTimestamp()
         };
 
-        if (editProductId) {
-            if (photoUrls.length > 0) {
-                productData.photos = photoUrls;
-            }
-            await updateDoc(doc(db, "products", editProductId), productData);
-            statusMsg.textContent = "✅ Produit mis à jour !";
-            
-            editProductId = null;
-            btn.textContent = "PUBLIER LE PRODUIT";
-            document.getElementById('productFiles').required = true;
-        } else {
-            if (photoUrls.length === 0) throw new Error("Les photos sont obligatoires.");
-            
-            productData.photos = photoUrls;
-            productData.createdAt = serverTimestamp();
-            await addDoc(collection(db, "products"), productData);
-            statusMsg.textContent = "✅ Produit ajouté !";
-        }
+        await addDoc(collection(db, "products"), productData);
+        statusMsg.textContent = "✅ Produit ajouté avec succès !";
 
         productForm.reset();
+        document.getElementById('productCareGuideEditor').innerHTML = ''; 
         loadInventory();
     } catch (err) {
         console.error(err);
@@ -121,28 +110,159 @@ window.editProduct = async (id) => {
         if (docSnap.exists()) {
             const p = docSnap.data();
             
-            productForm.elements['name'].value = p.name || '';
-            productForm.elements['latinName'].value = p.latinName || '';
-            productForm.elements['price'].value = p.price || '';
-            productForm.elements['price5'].value = p.price5 || '';
-            productForm.elements['price10'].value = p.price10 || '';
-            productForm.elements['stock'].value = p.stock || '';
-            productForm.elements['category'].value = p.category || '';
-            productForm.elements['difficulty'].value = p.difficulty || '';
-            productForm.elements['description'].value = p.description || '';
-            productForm.elements['careGuide'].value = p.careGuide || '';
+            document.getElementById('editProductId').value = id;
+            document.getElementById('editName').value = p.name || '';
+            document.getElementById('editLatinName').value = p.latinName || '';
+            document.getElementById('editPrice').value = p.price || '';
+            document.getElementById('editPrice5').value = p.price5 || '';
+            document.getElementById('editPrice10').value = p.price10 || '';
+            document.getElementById('editStock').value = p.stock || '';
+            document.getElementById('editCategory').value = p.category || '';
+            document.getElementById('editDifficulty').value = p.difficulty || '';
+            document.getElementById('editDescription').value = p.description || '';
             
-            editProductId = id;
-            document.getElementById('btnSubmit').textContent = "METTRE À JOUR LE PRODUIT";
-            document.getElementById('productFiles').required = false; 
+            // Nouveau : Injection des balises HTML complexes à l'intérieur de l'éditeur de la modale
+            document.getElementById('editCareGuideEditor').innerHTML = p.careGuide || '';
             
-            window.scrollTo(0, 0);
+            renderEditPhotos(p.photos || [], id);
+            
+            document.getElementById('editProductModal').style.display = 'flex';
         }
     } catch (error) {
         console.error("Erreur de chargement :", error);
         alert("Impossible de charger le produit.");
     }
 };
+
+window.closeEditModal = () => {
+    document.getElementById('editProductModal').style.display = 'none';
+    document.getElementById('editProductForm').reset();
+    // Nouveau : Remise à zéro propre de l'éditeur de texte enrichi
+    document.getElementById('editCareGuideEditor').innerHTML = ''; 
+    document.getElementById('editUploadStatus').textContent = '';
+};
+
+// Gère l'affichage dynamique des photos existantes dans la modale
+function renderEditPhotos(photos, productId) {
+    const container = document.getElementById('editPhotosPreview');
+    container.innerHTML = '';
+    
+    if (photos.length === 0) {
+        container.innerHTML = '<p style="font-size:0.85rem; color:#888;">Aucune photo actuellement.</p>';
+        return;
+    }
+
+    photos.forEach((url, index) => {
+        const div = document.createElement('div');
+        div.className = 'edit-photo-item';
+        div.innerHTML = `
+            <img src="${url}">
+            <button type="button" onclick="deleteProductPhoto('${productId}', ${index}, '${url}')" title="Supprimer cette photo">×</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// Gère la suppression individuelle d'une photo depuis R2 et Firestore
+window.deleteProductPhoto = async (productId, photoIndex, photoUrl) => {
+    if (!confirm("Voulez-vous vraiment supprimer cette photo ?")) return;
+
+    try {
+        const key = new URL(photoUrl).pathname.substring(1);
+        const token = await auth.currentUser.getIdToken();
+        
+        // Suppression depuis le stockage R2
+        await fetch('/api/delete', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ keys: [key] })
+        });
+
+        // Mise à jour de Firestore
+        const docRef = doc(db, "products", productId);
+        const docSnap = await getDoc(docRef);
+        const photos = docSnap.data().photos || [];
+        
+        photos.splice(photoIndex, 1);
+        await updateDoc(docRef, { photos: photos });
+        
+        // Rafraîchissement visuel
+        renderEditPhotos(photos, productId);
+        
+    } catch (error) {
+        console.error("Erreur lors de la suppression de l'image :", error);
+        alert("Erreur lors de la suppression de l'image.");
+    }
+};
+
+// Soumission du formulaire de modification
+document.getElementById('editProductForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitEdit');
+    const statusText = document.getElementById('editUploadStatus');
+    const formData = new FormData(e.target);
+    const files = document.getElementById('editProductFiles').files;
+    const productId = document.getElementById('editProductId').value;
+
+    try {
+        btn.disabled = true;
+        statusText.textContent = files.length > 0 ? "Upload des nouvelles images... ⏳" : "Mise à jour en cours...";
+
+        let newUrls = [];
+
+        if (files.length > 0) {
+            const uploadData = new FormData();
+            for (let i = 0; i < files.length; i++) { uploadData.append('photos', files[i]); }
+            
+            const token = await auth.currentUser.getIdToken();
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: uploadData
+            });
+
+            if (!response.ok) throw new Error("Échec de l'upload");
+            const { files: uploadedFiles } = await response.json();
+            newUrls = uploadedFiles.map(f => f.url);
+        }
+
+        const docRef = doc(db, "products", productId);
+        const docSnap = await getDoc(docRef);
+        const currentPhotos = docSnap.exists() ? (docSnap.data().photos || []) : [];
+        
+        const finalPhotos = [...currentPhotos, ...newUrls];
+
+        // Nouveau : Capture du code HTML enrichi pour l'envoyer vers Firestore
+        const careGuideHtml = document.getElementById('editCareGuideEditor').innerHTML;
+
+        await updateDoc(docRef, {
+            name: formData.get('name'),
+            latinName: formData.get('latinName'),
+            price: parseFloat(formData.get('price')) || null,
+            price5: parseFloat(formData.get('price5')) || null,
+            price10: parseFloat(formData.get('price10')) || null,
+            stock: parseInt(formData.get('stock')),
+            category: formData.get('category'),
+            difficulty: formData.get('difficulty'),
+            description: formData.get('description'),
+            careGuide: careGuideHtml,
+            photos: finalPhotos
+        });
+
+        statusText.textContent = "✅ Produit mis à jour !";
+        loadInventory();
+        setTimeout(() => closeEditModal(), 1500);
+
+    } catch (err) {
+        console.error(err);
+        statusText.textContent = "❌ Erreur : " + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 // 3. Charger l'inventaire pour pouvoir supprimer/gérer
 async function loadInventory() {
@@ -157,17 +277,48 @@ async function loadInventory() {
         const p = productDoc.data();
         const div = document.createElement('div');
         div.className = 'inventory-item';
-        div.style.cssText = "display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #ddd; align-items:center;";
         
-        // Affichage dynamique pour rupture de stock
-        const stockText = p.stock > 0 ? `(${p.stock} en stock)` : `<strong style="color:red;">(Sold Out)</strong>`;
+        let stockClass = "stock-out";
+        let stockText = "Rupture";
+        if (p.stock > 10) {
+            stockClass = "stock-high";
+            stockText = `${p.stock} en stock`;
+        } else if (p.stock > 0) {
+            stockClass = "stock-low";
+            stockText = `Reste ${p.stock}`;
+        }
         
-        // Ajout de l'appel à la fonction editProduct
+        // Nouveau : Logique d'affichage dynamique des prix (si pas de prix unitaire, affiche les lots)
+        let priceContent = '';
+        if (p.price) {
+            priceContent = `<strong>${p.price} €</strong>`;
+            if (p.price5) priceContent += `<span style="font-size:0.75rem; color:#666;"><br>Lot x5: ${p.price5} €</span>`;
+            if (p.price10) priceContent += `<span style="font-size:0.75rem; color:#666;"><br>Lot x10: ${p.price10} €</span>`;
+        } else {
+            let lots = [];
+            if (p.price5) lots.push(`Lot x5: ${p.price5} €`);
+            if (p.price10) lots.push(`Lot x10: ${p.price10} €`);
+            priceContent = lots.length > 0 ? `<div style="font-size:0.8rem; display:flex; flex-direction:column; gap:2px;">${lots.map(l => `<span>${l}</span>`).join('')}</div>` : '<strong>-</strong>';
+        }
+
+        // Nouveau : Extraction de la première photo pour l'aperçu miniature
+        const firstPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : '../assets/img/placeholder.jpg';
+        
         div.innerHTML = `
-            <span><strong>${p.name}</strong> ${stockText} - ${p.price}€</span>
+            <img src="${firstPhoto}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <span style="font-weight:600; font-size:1.1rem;">${p.name}</span>
+                <span style="font-size:0.85rem; color:#888; text-transform:capitalize;">${p.category} | ${p.latinName || 'N/A'}</span>
+            </div>
             <div>
-                <button onclick="editProduct('${productDoc.id}')" style="color:blue; background:none; border:none; cursor:pointer; margin-right:15px;">Modifier</button>
-                <button onclick="deleteProduct('${productDoc.id}')" style="color:red; background:none; border:none; cursor:pointer;">Supprimer</button>
+                ${priceContent}
+            </div>
+            <div>
+                <span class="stock-badge ${stockClass}">${stockText}</span>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="editProduct('${productDoc.id}')" class="btn-outline">Gérer</button>
+                <button onclick="deleteProduct('${productDoc.id}')" class="btn-logout" style="border:none;">Supprimer</button>
             </div>
         `;
         container.appendChild(div);
@@ -658,4 +809,9 @@ window.moveGridImg = async (type, index, direction) => {
     [grid[index], grid[newIndex]] = [grid[newIndex], grid[index]];
     await updateDoc(docRef, { [type]: grid });
     loadGridPreviews();
+};
+
+// Nouveau : Fonction globale de formatage à la volée du texte sélectionné
+window.formatDoc = (cmd) => {
+    document.execCommand(cmd, false, null);
 };

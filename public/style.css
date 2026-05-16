@@ -978,7 +978,7 @@ footer {
 .product-page-layout {
     display: grid;
     /* La magie opère ici : 60% pour l'image, 35% pour l'achat, 5% d'espace */
-    grid-template-columns: 60% 35%;
+    grid-template-columns: 55% 40%;
     justify-content: space-between;
     gap: 40px;
     margin-top: 40px;

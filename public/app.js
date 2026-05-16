@@ -1,5 +1,5 @@
 import { db, auth } from './firebase-config.js';
-import { collection, query, getDocs, orderBy, doc, getDoc, addDoc, setDoc, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, query, getDocs, orderBy, doc, getDoc, addDoc, setDoc, updateDoc, increment, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 let allProducts = []; // Stockage local pour filtrer sans requêter Firebase en boucle
@@ -57,7 +57,6 @@ async function loadCatalogue() {
 
     if (!productGrid) return;
 
-    // Synchronisation du select avec l'URL au chargement
     if (initialCat && categoryFilter) {
         categoryFilter.value = initialCat;
     }
@@ -82,9 +81,21 @@ async function loadCatalogue() {
 
             productsToDisplay.forEach((product) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
-                const basePrice = product.price || product.price5 || 0;
                 
-                // NOUVEAU : Si le produit a des lots, on force l'utilisateur à aller sur la fiche pour choisir
+                // NOUVEAU : Logique de tarification en cascade (Unité -> Lot de 5 -> Lot de 10) avec texte gris
+                let basePrice = 0;
+                let lotText = '';
+                
+                if (product.price) {
+                    basePrice = product.price;
+                } else if (product.price5) {
+                    basePrice = product.price5;
+                    lotText = ' <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les 5)</span>';
+                } else if (product.price10) {
+                    basePrice = product.price10;
+                    lotText = ' <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les 10)</span>';
+                }
+                
                 const hasLots = product.price5 || product.price10;
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
@@ -97,7 +108,7 @@ async function loadCatalogue() {
                         <div class="product-info">
                             <p class="product-latin">${product.latinName}</p>
                             <h3 class="product-name">${product.name}</h3>
-                            <p class="product-price">${basePrice} €</p>
+                            <p class="product-price">${basePrice} €${lotText}</p>
                         </div>
                     </a>
                     <button class="btn-buy" onclick="${btnAction}" ${product.stock <= 0 ? 'disabled' : ''} style="${product.stock <= 0 ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
@@ -111,13 +122,11 @@ async function loadCatalogue() {
         const filterAndSort = () => {
             let filtered = [...allProducts];
             
-            // 1. Filtrage par Catégorie (priorité au select)
             const selectedCat = categoryFilter?.value;
             if (selectedCat && selectedCat !== 'all') {
                 filtered = filtered.filter(p => p.category === selectedCat);
             }
 
-            // 2. Recherche par texte
             const searchTerm = searchInput?.value.toLowerCase() || "";
             if (searchTerm) {
                 filtered = filtered.filter(p => 
@@ -126,10 +135,9 @@ async function loadCatalogue() {
                 );
             }
 
-            // 3. Tri
             const sortType = sortSelect?.value;
-            if (sortType === 'price-asc') filtered.sort((a, b) => a.price - b.price);
-            else if (sortType === 'price-desc') filtered.sort((a, b) => b.price - a.price);
+            if (sortType === 'price-asc') filtered.sort((a, b) => (a.price || a.price5 || a.price10) - (b.price || b.price5 || b.price10));
+            else if (sortType === 'price-desc') filtered.sort((a, b) => (b.price || b.price5 || b.price10) - (a.price || a.price5 || a.price10));
             else if (sortType === 'name-asc') filtered.sort((a, b) => a.name.localeCompare(b.name));
             else if (sortType === 'newest') filtered.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
@@ -255,18 +263,22 @@ window.addToCart = async (productId, lotSize = null) => {
 
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
     
-    // On crée un ID unique pour le panier (ex: "id_insecte_5" et "id_insecte_10" sont séparés)
     const cartId = lotSize ? `${productId}_${lotSize}` : productId;
     const existingItem = cart.find(item => item.cartId === cartId);
     
+    // NOUVEAU : On calcule le total d'insectes que l'utilisateur essaie d'ajouter
+    const multiplier = lotSize || 1;
+    const currentCartQty = existingItem ? existingItem.quantity : 0;
+    const projectedTotalInsects = (currentCartQty + 1) * multiplier;
+
+    if (projectedTotalInsects > maxStock) {
+        alert("Stock insuffisant pour ajouter cette quantité 🌿");
+        return;
+    }
+
     if (existingItem) {
-        if (existingItem.quantity >= maxStock) {
-            alert("Stock maximum atteint pour ce spécimen 🌿");
-            return;
-        }
         existingItem.quantity += 1;
     } else {
-        if (maxStock < 1) return; 
         cart.push({ id: productId, cartId: cartId, lotSize: lotSize, quantity: 1 });
     }
     
@@ -278,7 +290,17 @@ window.renderCart = async () => {
     const container = document.getElementById('cartItemsContainer');
     const totalEl = document.getElementById('cartTotalAmount');
     const btnCheckout = document.getElementById('btnCheckout');
-    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+    
+    // On récupère le panier brut
+    let rawCart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+
+    // NOUVEAU : Sécurité pour nettoyer les anciens articles qui n'ont pas de cartId
+    let cart = rawCart.filter(item => item.cartId !== undefined && item.cartId !== null);
+    
+    // Si on a supprimé des articles obsolètes, on met à jour la sauvegarde
+    if (cart.length !== rawCart.length) {
+        localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+    }
 
     if (cart.length === 0) {
         container.innerHTML = '<p style="text-align: center; margin-top: 50px; color: #888;">Votre panier est vide.</p>';
@@ -301,14 +323,15 @@ window.renderCart = async () => {
             if (docSnap.exists()) {
                 const p = docSnap.data();
                 
-                // NOUVEAU : Application dynamique du prix selon le lot choisi
                 const itemLot = cart[i].lotSize;
                 let itemPrice = p.price;
                 if (itemLot === 5) itemPrice = p.price5;
                 if (itemLot === 10) itemPrice = p.price10;
 
-                if (cart[i].quantity > p.stock) {
-                    cart[i].quantity = p.stock;
+                // NOUVEAU : Réajustement automatique du panier si le stock a baissé entre temps, en prenant en compte les lots
+                const multiplier = itemLot || 1;
+                if ((cart[i].quantity * multiplier) > p.stock) {
+                    cart[i].quantity = Math.floor(p.stock / multiplier);
                     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
                 }
                 
@@ -348,13 +371,19 @@ window.updateCartQty = (cartId, change, maxStock) => {
     const itemIndex = cart.findIndex(item => item.cartId === cartId);
     
     if (itemIndex > -1) {
-        const newQty = cart[itemIndex].quantity + change;
-        if (change > 0 && newQty > maxStock) {
+        const item = cart[itemIndex];
+        const multiplier = item.lotSize || 1;
+        const newQty = item.quantity + change;
+        
+        // NOUVEAU : Vérification de la nouvelle quantité selon le lot
+        if (change > 0 && (newQty * multiplier) > maxStock) {
             alert("Stock maximum atteint pour ce spécimen 🌿");
             return;
         }
+        
         cart[itemIndex].quantity = newQty;
         if (cart[itemIndex].quantity <= 0) cart.splice(itemIndex, 1);
+        
         localStorage.setItem('terraophis_cart', JSON.stringify(cart));
         renderCart();
     }
@@ -388,7 +417,6 @@ window.processCheckout = async () => {
 
     if (cart.length === 0 || totalValue <= 0) return;
 
-    // Vérification de la session client avant redirection
     const user = auth.currentUser;
     if (!user) {
         alert("Veuillez vous connecter pour valider votre panier 🌿");
@@ -396,7 +424,23 @@ window.processCheckout = async () => {
         return;
     }
 
-    // Redirection vers la page de paiement détaillée (Checkout)
+    // NOUVEAU : Déduction automatique et mathématique des stocks pour chaque article du panier
+    try {
+        for (const item of cart) {
+            const multiplier = item.lotSize || 1;
+            const totalDeduction = item.quantity * multiplier;
+            
+            const productRef = doc(db, "products", item.id);
+            await updateDoc(productRef, {
+                stock: increment(-totalDeduction)
+            });
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour des stocks :", error);
+        alert("Une erreur est survenue lors de la vérification des stocks.");
+        return;
+    }
+
     window.location.href = '/checkout.html';
 };
 
