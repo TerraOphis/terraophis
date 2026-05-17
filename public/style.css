@@ -1296,6 +1296,88 @@ footer {
 }
 
 
+
+
+
+
+/* ========================================= */
+/* NOUVEAU : BOUTON PANIER FLOTTANT          */
+/* ========================================= */
+
+.floating-cart-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background-color: #4d5d30; /* Vert du thème Terraophis */
+    color: #f9f8f2;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.floating-cart-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.floating-cart-btn:hover {
+    background-color: #3b4724;
+    transform: translateY(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.floating-cart-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: #a35d5d; /* Rouge Terraophis pour alerter */
+    color: white;
+    font-size: 0.85rem;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid var(--primary-beige);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Animation au moment de l'ajout */
+@keyframes cartBounce {
+    0% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.1) translateY(-10px); }
+    100% { transform: scale(1) translateY(0); }
+}
+
+.floating-cart-btn.bounce {
+    animation: cartBounce 0.3s ease-in-out;
+}
+
+@media (max-width: 768px) {
+    .floating-cart-btn {
+        bottom: 20px;
+        right: 20px;
+        width: 55px;
+        height: 55px;
+    }
+}
+
+
+
+
 /* --- Responsive Mobile --- */
 @media (max-width: 992px) {
     .product-page-layout {

@@ -340,6 +340,10 @@ window.addToCart = async (productId, lotSize = null) => {
     }
     
     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+    
+    // NOUVEAU : Mise à jour de la bulle avant l'ouverture de la barre latérale
+    if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+    
     toggleCart(true); 
 };
 
@@ -442,17 +446,49 @@ window.updateCartQty = (cartId, change, maxStock) => {
         
         localStorage.setItem('terraophis_cart', JSON.stringify(cart));
         renderCart();
+        
+        // NOUVEAU : Synchronisation après ajustement manuel (+ / -)
+        if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
     }
 };
 
+// Ligne précédente
 window.removeFromCart = (cartId) => {
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
     cart = cart.filter(item => item.cartId !== cartId);
     localStorage.setItem('terraophis_cart', JSON.stringify(cart));
     renderCart();
+    
+    // NOUVEAU : Synchronisation de la bulle après suppression
+    if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+};
+
+// NOUVEAU : Fonction centralisée pour mettre à jour la bulle flottante
+window.updateFloatingCart = () => {
+    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+    cart = cart.filter(item => item.cartId !== undefined && item.cartId !== null);
+    
+    // Calcule la quantité totale d'articles distincts
+    let totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    const floatBtn = document.getElementById('floatingCartBtn');
+    const floatBadge = document.getElementById('floatingCartBadge');
+    
+    if (floatBtn && floatBadge) {
+        if (totalItemsCount > 0) {
+            floatBtn.classList.add('visible');
+            floatBadge.textContent = totalItemsCount;
+            // Animation de rebond
+            floatBtn.classList.add('bounce');
+            setTimeout(() => floatBtn.classList.remove('bounce'), 300);
+        } else {
+            floatBtn.classList.remove('visible');
+        }
+    }
 };
 
 // NOUVEAU: Gestion complète du panier
+// Ligne suivante
 window.toggleCart = (forceOpen = false) => {
     const overlay = document.getElementById('cartOverlay');
     const sidebar = document.getElementById('cartSidebar');
@@ -831,6 +867,21 @@ async function loadSingleGuide() {
     }
 }
 
+// NOUVEAU : Injection automatique du bouton flottant sur tout le site
+function initFloatingCart() {
+    if (document.getElementById('floatingCartBtn')) return;
+    
+    const btn = document.createElement('div');
+    btn.id = 'floatingCartBtn';
+    btn.className = 'floating-cart-btn';
+    btn.onclick = () => toggleCart(true);
+    btn.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <span id="floatingCartBadge" class="floating-cart-badge">0</span>
+    `;
+    document.body.appendChild(btn);
+    if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+}
 
 // On lance les fonctions
 loadFooter();
@@ -842,3 +893,5 @@ loadGuidesList();
 loadSingleGuide(); 
 loadNavbar();
 
+// NOUVEAU : Lancement de l'initialisation du panier
+initFloatingCart();
