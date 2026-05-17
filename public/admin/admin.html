@@ -298,7 +298,29 @@
                 </form>
             </div>
         </div>
-    </main>
+
+        <div id="editCategoryModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 500px;">
+                <span class="close-modal" onclick="closeEditCategoryModal()">&times;</span>
+                <h2>Modifier la catégorie</h2>
+                <form id="editCategoryForm" class="product-form">
+                    <div class="form-group">
+                        <input type="text" id="editCatId" readonly title="L'identifiant URL ne peut pas être modifié pour ne pas casser les liens des articles existants." style="background: #f0f0f0; cursor: not-allowed; color: #888;">
+                        <input type="text" id="editCatName" placeholder="Nom de la catégorie" required>
+                    </div>
+                    <div class="form-group">
+                        <select id="editCatType" required>
+                            <option value="animaux">Animaux</option>
+                            <option value="materiels">Matériels & Accessoires</option>
+                        </select>
+                        <input type="text" id="editCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
+                    </div>
+                    <button type="submit" class="btn-buy">METTRE À JOUR LA CATÉGORIE</button>
+                </form>
+            </div>
+        </div>
+
+</main>
 
     <script type="module" src="admin.js"></script>
 </body>

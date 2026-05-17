@@ -1048,12 +1048,17 @@ window.loadAdminCategories = async () => {
 
     categoriesSnap.forEach(catDoc => {
         const cat = catDoc.data();
+        
+        // NOUVEAU : Ajout du bouton "Modifier" à côté du bouton "Supprimer"
         listHtml += `
             <div class="inventory-item" style="grid-template-columns: 2fr 1fr 1fr auto; align-items: center;">
                 <div><strong>${cat.name}</strong> <span style="font-size:0.8rem; color:#888;">(${catDoc.id})</span></div>
                 <div>Type: ${cat.type}</div>
                 <div>Lots configurés: [${cat.lots.join(', ')}]</div>
-                <button onclick="deleteCategory('${catDoc.id}')" class="btn-logout" style="border:none; padding: 6px 12px;">Supprimer</button>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="openEditCategory('${catDoc.id}')" class="btn-buy" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 4px;">Modifier</button>
+                    <button onclick="deleteCategory('${catDoc.id}')" class="btn-logout" style="border:none; padding: 6px 12px;">Supprimer</button>
+                </div>
             </div>
         `;
         selectOptionsHtml += `<option value="${catDoc.id}">${cat.name}</option>`;
@@ -1103,7 +1108,42 @@ document.getElementById('categoryForm')?.addEventListener('submit', async (e) =>
 
 window.deleteCategory = async (id) => {
     if (confirm("Confirmer la suppression de la catégorie ? Les articles liés ne seront pas supprimés mais devront être réassignés.")) {
+// Ligne précédente
         await deleteDoc(doc(db, "categories", id));
         loadAdminCategories();
     }
 };
+
+// NOUVEAU : Fonctions pour gérer la modale d'édition de catégorie
+window.openEditCategory = async (id) => {
+    const catSnap = await getDoc(doc(db, "categories", id));
+    if (catSnap.exists()) {
+        const cat = catSnap.data();
+        document.getElementById('editCatId').value = id;
+        document.getElementById('editCatName').value = cat.name;
+        document.getElementById('editCatType').value = cat.type;
+        document.getElementById('editCatLots').value = cat.lots.join(', ');
+        document.getElementById('editCategoryModal').style.display = 'flex';
+    }
+};
+
+window.closeEditCategoryModal = () => {
+    document.getElementById('editCategoryModal').style.display = 'none';
+};
+
+document.getElementById('editCategoryForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editCatId').value;
+    const name = document.getElementById('editCatName').value.trim();
+    const type = document.getElementById('editCatType').value;
+    const lotsRaw = document.getElementById('editCatLots').value;
+    
+    const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
+
+    if (!name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
+
+    await updateDoc(doc(db, "categories", id), { name, type, lots });
+    closeEditCategoryModal();
+    loadAdminCategories();
+    alert("Catégorie mise à jour avec succès ! ✏️");
+});
