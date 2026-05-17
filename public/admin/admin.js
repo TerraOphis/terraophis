@@ -20,6 +20,7 @@ onAuthStateChanged(auth, (user) => {
             document.getElementById('adminNav').style.display = 'flex';
             document.getElementById('adminMain').style.display = 'block';
 
+            loadAdminCategories();
             loadInventory(); 
             loadOrders();
             loadSliderPreview();
@@ -71,20 +72,23 @@ productForm.addEventListener('submit', async (e) => {
 
         if (photoUrls.length === 0) throw new Error("Les photos sont obligatoires pour un nouveau produit.");
 
-        // Nouveau : Lecture du contenu textuel stylisé (HTML) généré par l'éditeur
         const careGuideHtml = document.getElementById('productCareGuideEditor').innerHTML;
+
+        // NOUVEAU : Capture des inputs de prix générés dynamiquement
+        const prices = {};
+        document.querySelectorAll('#dynamicPricesContainer .lot-price-input').forEach(input => {
+            prices[input.dataset.lot] = parseFloat(input.value) || 0;
+        });
 
         const productData = {
             name: formData.get('name'),
             latinName: formData.get('latinName'),
-            price: parseFloat(formData.get('price')) || null,
-            price5: parseFloat(formData.get('price5')) || null,
-            price10: parseFloat(formData.get('price10')) || null,
             stock: parseInt(formData.get('stock')),
             category: formData.get('category'),
             difficulty: formData.get('difficulty'),
             description: formData.get('description'),
             careGuide: careGuideHtml,
+            prices: prices, // Enregistrement de la map complète
             photos: photoUrls,
             createdAt: serverTimestamp()
         };
@@ -111,22 +115,22 @@ window.editProduct = async (id) => {
         if (docSnap.exists()) {
             const p = docSnap.data();
             
-            document.getElementById('editProductId').value = id;
-            document.getElementById('editName').value = p.name || '';
-            document.getElementById('editLatinName').value = p.latinName || '';
-            document.getElementById('editPrice').value = p.price || '';
-            document.getElementById('editPrice5').value = p.price5 || '';
-            document.getElementById('editPrice10').value = p.price10 || '';
-            document.getElementById('editStock').value = p.stock || '';
-            document.getElementById('editCategory').value = p.category || '';
-            document.getElementById('editDifficulty').value = p.difficulty || '';
-            document.getElementById('editDescription').value = p.description || '';
+            // Assignation sécurisée des valeurs textuelles et sélecteurs
+            if (document.getElementById('editProductId')) document.getElementById('editProductId').value = id;
+            if (document.getElementById('editName')) document.getElementById('editName').value = p.name || '';
+            if (document.getElementById('editLatinName')) document.getElementById('editLatinName').value = p.latinName || '';
+            if (document.getElementById('editStock')) document.getElementById('editStock').value = p.stock || '';
+            if (document.getElementById('editCategory')) document.getElementById('editCategory').value = p.category || '';
+            if (document.getElementById('editDifficulty')) document.getElementById('editDifficulty').value = p.difficulty || '';
+            if (document.getElementById('editDescription')) document.getElementById('editDescription').value = p.description || '';
+            if (document.getElementById('editCareGuideEditor')) document.getElementById('editCareGuideEditor').innerHTML = p.careGuide || '';
             
-            // Nouveau : Injection des balises HTML complexes à l'intérieur de l'éditeur de la modale
-            document.getElementById('editCareGuideEditor').innerHTML = p.careGuide || '';
+            // Génération des inputs de lots spécifiques à la catégorie du produit chargé
+            await generatePriceInputs('editDynamicPricesContainer', p.category, p.prices || {
+                "1": p.price, "3": p.price3, "5": p.price5, "10": p.price10
+            });
             
             renderEditPhotos(p.photos || [], id);
-            
             document.getElementById('editProductModal').style.display = 'flex';
         }
     } catch (error) {
@@ -239,19 +243,22 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
         // Nouveau : Capture du code HTML enrichi pour l'envoyer vers Firestore
         const careGuideHtml = document.getElementById('editCareGuideEditor').innerHTML;
 
-        await updateDoc(docRef, {
-            name: formData.get('name'),
-            latinName: formData.get('latinName'),
-            price: parseFloat(formData.get('price')) || null,
-            price5: parseFloat(formData.get('price5')) || null,
-            price10: parseFloat(formData.get('price10')) || null,
-            stock: parseInt(formData.get('stock')),
-            category: formData.get('category'),
-            difficulty: formData.get('difficulty'),
-            description: formData.get('description'),
-            careGuide: careGuideHtml,
-            photos: finalPhotos
-        });
+        const prices = {};
+                document.querySelectorAll('#editDynamicPricesContainer .lot-price-input').forEach(input => {
+                    prices[input.dataset.lot] = parseFloat(input.value) || 0;
+                });
+
+                await updateDoc(docRef, {
+                    name: formData.get('name'),
+                    latinName: formData.get('latinName'),
+                    stock: parseInt(formData.get('stock')),
+                    category: formData.get('category'),
+                    difficulty: formData.get('difficulty'),
+                    description: formData.get('description'),
+                    careGuide: careGuideHtml,
+                    prices: prices, 
+                    photos: finalPhotos
+                });
 
         statusText.textContent = "✅ Produit mis à jour !";
         loadInventory();
@@ -291,15 +298,15 @@ async function loadInventory() {
         
         // Nouveau : Logique d'affichage dynamique des prix (si pas de prix unitaire, affiche les lots)
         let priceContent = '';
-        if (p.price) {
-            priceContent = `<strong>${p.price} €</strong>`;
-            if (p.price5) priceContent += `<span style="font-size:0.75rem; color:#666;"><br>Lot x5: ${p.price5} €</span>`;
-            if (p.price10) priceContent += `<span style="font-size:0.75rem; color:#666;"><br>Lot x10: ${p.price10} €</span>`;
+        if (p.prices && Object.keys(p.prices).length > 0) {
+            priceContent = Object.entries(p.prices).map(([lot, pr]) => `<span>Lot x${lot}: ${pr} €</span>`).join('<br>');
         } else {
             let lots = [];
+            if (p.price) lots.push(`Unité: ${p.price} €`);
+            if (p.price3) lots.push(`Lot x3: ${p.price3} €`);
             if (p.price5) lots.push(`Lot x5: ${p.price5} €`);
             if (p.price10) lots.push(`Lot x10: ${p.price10} €`);
-            priceContent = lots.length > 0 ? `<div style="font-size:0.8rem; display:flex; flex-direction:column; gap:2px;">${lots.map(l => `<span>${l}</span>`).join('')}</div>` : '<strong>-</strong>';
+            priceContent = lots.length > 0 ? lots.join('<br>') : '<strong>-</strong>';
         }
 
         // Nouveau : Extraction de la première photo pour l'aperçu miniature
@@ -1022,4 +1029,81 @@ window.handleInlineImageUpload = async (input, editorId) => {
 // Modification de l'utilitaire existant pour accepter les paramètres optionnels (ex: types de blocs ou alignements)
 window.formatDoc = (cmd, value = null) => {
     document.execCommand(cmd, false, value);
+};
+
+// NOUVEAU : Logique complète d'administration des catégories et d'inputs dynamiques
+
+window.loadAdminCategories = async () => {
+    const listContainer = document.getElementById('adminCategoriesList');
+    const productCatSelect = document.getElementById('adminProductCategory');
+    const editCatSelect = document.getElementById('editCategory');
+    
+    if (!listContainer) return;
+    
+    const categoriesSnap = await getDocs(collection(db, "categories"));
+    
+    let listHtml = '';
+    let selectOptionsHtml = '<option value="" disabled selected>Choisir une catégorie...</option>';
+    let editOptionsHtml = '';
+
+    categoriesSnap.forEach(catDoc => {
+        const cat = catDoc.data();
+        listHtml += `
+            <div class="inventory-item" style="grid-template-columns: 2fr 1fr 1fr auto; align-items: center;">
+                <div><strong>${cat.name}</strong> <span style="font-size:0.8rem; color:#888;">(${catDoc.id})</span></div>
+                <div>Type: ${cat.type}</div>
+                <div>Lots configurés: [${cat.lots.join(', ')}]</div>
+                <button onclick="deleteCategory('${catDoc.id}')" class="btn-logout" style="border:none; padding: 6px 12px;">Supprimer</button>
+            </div>
+        `;
+        selectOptionsHtml += `<option value="${catDoc.id}">${cat.name}</option>`;
+        editOptionsHtml += `<option value="${catDoc.id}">${cat.name}</option>`;
+    });
+
+    listContainer.innerHTML = listHtml || '<p>Aucune catégorie configurée.</p>';
+    if (productCatSelect) productCatSelect.innerHTML = selectOptionsHtml;
+    if (editCatSelect) editCatSelect.innerHTML = editOptionsHtml;
+};
+
+window.generatePriceInputs = async (containerId, categoryId, existingPrices = null) => {
+    const container = document.getElementById(containerId);
+    if (!container || !categoryId) return;
+
+    const catSnap = await getDoc(doc(db, "categories", categoryId));
+    if (!catSnap.exists()) return;
+
+    const lots = catSnap.data().lots;
+    container.innerHTML = lots.map(lot => {
+        const value = existingPrices && existingPrices[lot] !== undefined ? existingPrices[lot] : '';
+        return `
+            <div style="flex: 1; min-width: 120px;">
+                <label style="font-size:0.8rem; font-weight:600; display:block; margin-bottom:5px;">Prix Lot de ${lot} (€)</label>
+                <input type="number" class="lot-price-input" data-lot="${lot}" placeholder="Ex: 15.00" step="0.01" value="${value}" required>
+            </div>
+        `;
+    }).join('');
+};
+
+document.getElementById('categoryForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('newCatId').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const name = document.getElementById('newCatName').value.trim();
+    const type = document.getElementById('newCatType').value;
+    const lotsRaw = document.getElementById('newCatLots').value;
+    
+    const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
+
+    if (!id || !name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
+
+    await setDoc(doc(db, "categories", id), { name, type, lots });
+    document.getElementById('categoryForm').reset();
+    loadAdminCategories();
+    alert("Catégorie créée et liée avec succès ! 🎉");
+});
+
+window.deleteCategory = async (id) => {
+    if (confirm("Confirmer la suppression de la catégorie ? Les articles liés ne seront pas supprimés mais devront être réassignés.")) {
+        await deleteDoc(doc(db, "categories", id));
+        loadAdminCategories();
+    }
 };

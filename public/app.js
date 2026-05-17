@@ -57,6 +57,18 @@ async function loadCatalogue() {
 
     if (!productGrid) return;
 
+    // NOUVEAU : Remplissage dynamique des options du filtre de catégorie depuis Firestore
+    // Ligne précédente
+    if (categoryFilter) {
+        const categoriesSnap = await getDocs(collection(db, "categories"));
+        let optionsHtml = '<option value="all">Toutes les catégories</option>';
+        categoriesSnap.forEach(catDoc => {
+            // NOUVEAU : Utilisation des backticks (`) pour que les variables soient bien injectées
+            optionsHtml += `<option value="${catDoc.id}">${catDoc.data().name}</option>`;
+        });
+        categoryFilter.innerHTML = optionsHtml;
+    }
+
     if (initialCat && categoryFilter) {
         categoryFilter.value = initialCat;
     }
@@ -85,21 +97,21 @@ async function loadCatalogue() {
                 let basePrice = 0;
                 let lotText = '';
                 
-                if (product.price) {
-                    basePrice = product.price;
-                } else if (product.price5) {
-                    basePrice = product.price5;
-                    lotText = ' <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les 5)</span>';
-                } else if (product.price10) {
-                    basePrice = product.price10;
-                    lotText = ' <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les 10)</span>';
+                if (product.prices && Object.keys(product.prices).length > 0) {
+                    const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
+                    const maxLot = lots[0];
+                    basePrice = product.prices[maxLot];
+                    lotText = maxLot > 1 ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les ${maxLot})</span>` : '';
+                } else {
+                    if (product.price10) { basePrice = product.price10; lotText = ' (les 10)'; }
+                    else if (product.price5) { basePrice = product.price5; lotText = ' (les 5)'; }
+                    else if (product.price3) { basePrice = product.price3; lotText = ' (les 3)'; }
+                    else { basePrice = product.price || 0; }
                 }
                 
-                const hasLots = product.price5 || product.price10;
+                const hasLots = (product.prices && Object.keys(product.prices).length > 1) || product.price5 || product.price10 || product.price3;
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
-
-                // NOUVEAU : Génération du badge "Bientôt épuisé" si le stock est entre 1 et 10
                 const isLowStock = product.stock > 0 && product.stock <= 10;
                 const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
 
@@ -151,9 +163,15 @@ async function loadCatalogue() {
                 // Si b est épuisé et pas a, a monte
                 if (!aEpuise && bEpuise) return -1; 
 
-                // Si les deux sont dispos (ou les deux épuisés), on applique le tri normal choisi par le client
-                if (sortType === 'price-asc') return (a.price || a.price5 || a.price10) - (b.price || b.price5 || b.price10);
-                if (sortType === 'price-desc') return (b.price || b.price5 || b.price10) - (a.price || a.price5 || a.price10);
+                const getPriceForSort = (p) => {
+                    if (p.prices && Object.keys(p.prices).length > 0) {
+                        return p.prices[Object.keys(p.prices)[0]]; 
+                    }
+                    return p.price || p.price5 || p.price10 || p.price3 || 0;
+                };
+
+                if (sortType === 'price-asc') return getPriceForSort(a) - getPriceForSort(b);
+                if (sortType === 'price-desc') return getPriceForSort(b) - getPriceForSort(a);
                 if (sortType === 'name-asc') return a.name.localeCompare(b.name);
                 
                 // Tri par défaut (newest)
@@ -197,29 +215,45 @@ async function loadProductDetails() {
             const formattedDescription = product.description.replace(/\n/g, '<br>');
             const careGuideHtml = product.careGuide ? product.careGuide.replace(/\n/g, '<br>') : 'Aucune information complémentaire.';
 
-            // NOUVEAU : Construction de la liste des miniatures cliquables
             let thumbnailsHtml = '';
             photos.forEach((photo, index) => {
                 thumbnailsHtml += `<img src="${photo}" alt="Miniature" onclick="document.getElementById('mainProductImg').src='${photo}'">`;
             });
 
-            // NOUVEAU : Sélecteur dynamique de Lots
-            let basePrice = product.price || product.price5 || 0;
+            // NOUVEAU : Construction dynamique du sélecteur de lots
             let lotSelectorHtml = '';
+            let defaultPrice = 0;
             
-            if (product.price5 || product.price10) {
+            if (product.prices && Object.keys(product.prices).length > 0) {
+                const sortedLots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
+                defaultPrice = product.prices[sortedLots[0]];
+
                 lotSelectorHtml = `
                     <div class="lot-selector">
                         <label style="display:block; font-size:0.85rem; margin-bottom:5px;">Quantité</label>
-                        <select id="lotSelect" onchange="updateDisplayPrice(this.value, ${product.price5 || 0}, ${product.price10 || 0})">
-                            ${product.price5 ? `<option value="5">Lot de 5 - ${product.price5} €</option>` : ''}
-                            ${product.price10 ? `<option value="10">Lot de 10 - ${product.price10} €</option>` : ''}
+                        <select id="lotSelect" onchange="updateDisplayPrice()">
+                            ${Object.entries(product.prices).map(([lot, price]) => `
+                                <option value="${lot}" ${Number(lot) === sortedLots[0] ? 'selected' : ''}>Lot de ${lot} - ${price} €</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `;
+            } else {
+                // Rétrocompatibilité anciens articles
+                defaultPrice = product.price10 || product.price5 || product.price3 || product.price || 0;
+                lotSelectorHtml = `
+                    <div class="lot-selector">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:5px;">Quantité</label>
+                        <select id="lotSelect" onchange="updateDisplayPrice()">
+                            ${product.price ? `<option value="1">À l'unité - ${product.price} €</option>` : ''}
+                            ${product.price3 ? `<option value="3" ${defaultPrice === product.price3 ? 'selected' : ''}>Lot de 3 - ${product.price3} €</option>` : ''}
+                            ${product.price5 ? `<option value="5" ${defaultPrice === product.price5 ? 'selected' : ''}>Lot de 5 - ${product.price5} €</option>` : ''}
+                            ${product.price10 ? `<option value="10" ${defaultPrice === product.price10 ? 'selected' : ''}>Lot de 10 - ${product.price10} €</option>` : ''}
                         </select>
                     </div>
                 `;
             }
 
-            // NOUVEAU : Grille structurée (Image/Desc à gauche, Achat/Fiche à droite)
             detailsContainer.innerHTML = `
                 <div class="product-page-layout">
                     <div class="product-left">
@@ -237,7 +271,7 @@ async function loadProductDetails() {
                     <div class="product-right">
                         <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
                         <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName}</p>
-                        <p class="product-price" id="displayPrice" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${basePrice} €</p>
+                        <p class="product-price" id="displayPrice" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${defaultPrice} €</p>
                         
                         ${lotSelectorHtml}
 
@@ -263,9 +297,13 @@ async function loadProductDetails() {
 }
 
 // Fonctions globales pour le fonctionnement de la page et du panier
-window.updateDisplayPrice = (val, p5, p10) => {
-    const p = val == 10 ? p10 : p5;
-    document.getElementById('displayPrice').textContent = p + ' €';
+window.updateDisplayPrice = () => {
+    const select = document.getElementById('lotSelect');
+    if (select) {
+        const selectedOption = select.options[select.selectedIndex];
+        const priceText = selectedOption.text.split(' - ')[1]; 
+        document.getElementById('displayPrice').textContent = priceText;
+    }
 };
 
 window.addSelectedToCart = (id) => {
@@ -310,13 +348,9 @@ window.renderCart = async () => {
     const totalEl = document.getElementById('cartTotalAmount');
     const btnCheckout = document.getElementById('btnCheckout');
     
-    // On récupère le panier brut
     let rawCart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-
-    // NOUVEAU : Sécurité pour nettoyer les anciens articles qui n'ont pas de cartId
     let cart = rawCart.filter(item => item.cartId !== undefined && item.cartId !== null);
     
-    // Si on a supprimé des articles obsolètes, on met à jour la sauvegarde
     if (cart.length !== rawCart.length) {
         localStorage.setItem('terraophis_cart', JSON.stringify(cart));
     }
@@ -341,13 +375,16 @@ window.renderCart = async () => {
             const docSnap = await getDoc(doc(db, "products", cart[i].id));
             if (docSnap.exists()) {
                 const p = docSnap.data();
-                
                 const itemLot = cart[i].lotSize;
-                let itemPrice = p.price;
-                if (itemLot === 5) itemPrice = p.price5;
-                if (itemLot === 10) itemPrice = p.price10;
+                
+                // NOUVEAU : Récupération dynamique du prix depuis l'objet ou rétrocompatibilité
+                let itemPrice = 0;
+                if (p.prices && p.prices[itemLot] !== undefined) {
+                    itemPrice = p.prices[itemLot];
+                } else {
+                    itemPrice = itemLot === 1 ? p.price : p[`price${itemLot}`] || p.price || 0;
+                }
 
-                // NOUVEAU : Réajustement automatique du panier si le stock a baissé entre temps, en prenant en compte les lots
                 const multiplier = itemLot || 1;
                 if ((cart[i].quantity * multiplier) > p.stock) {
                     cart[i].quantity = Math.floor(p.stock / multiplier);
@@ -587,6 +624,26 @@ async function loadNavbar() {
         const html = await response.text();
         navElement.innerHTML = html;
 
+        // NOUVEAU : Chargement et construction dynamique des catégories dans le menu de la navbar
+        const dropdownContent = navElement.querySelector('.dropdown-content');
+        if (dropdownContent) {
+            const categoriesSnap = await getDocs(collection(db, "categories"));
+            let animauxHtml = '<li class="dropdown-subtitle">ANIMAUX</li>';
+            let materielsHtml = '<li class="dropdown-divider"></li><li class="dropdown-subtitle">MATÉRIELS</li>';
+            
+            categoriesSnap.forEach(catDoc => {
+                const cat = catDoc.data();
+                const itemHtml = `<li><a href="boutique.html?cat=${catDoc.id}">→ ${cat.name.toUpperCase()}</a></li>`;
+                if (cat.type === 'materiels') {
+                    materielsHtml += itemHtml;
+                } else {
+                    animauxHtml += itemHtml;
+                }
+            });
+            
+            dropdownContent.innerHTML = animauxHtml + materielsHtml;
+        }
+
         const currentPage = window.location.pathname;
         const links = navElement.querySelectorAll('.nav-links a');
         links.forEach(link => {
@@ -615,7 +672,6 @@ async function loadNavbar() {
             });
         });
 
-        // NOUVEAU : On applique l'état de session dès que la navbar est injectée dans la page
         if (typeof window.updateNavAuthUI === 'function') {
             window.updateNavAuthUI(auth.currentUser);
         }
