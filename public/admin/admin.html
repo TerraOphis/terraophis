@@ -17,6 +17,11 @@
     <nav class="admin-nav" id="adminNav" style="display: none;">
         <div class="logo">TERRAOPHIS <span style="font-size: 0.7rem; color: #888;">PANEL ADMIN</span></div>
         
+        <div id="adminWeatherWidget" style="background: rgba(74, 66, 56, 0.05); padding: 5px 15px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-light);">
+            <span id="adminWeatherIcon">⏳</span>
+            <span id="adminWeatherTemp" style="color: var(--accent-brown); font-weight: 600;">Chargement météo...</span>
+        </div>
+
         <div class="admin-tabs">
             <button class="tab-btn active" onclick="switchTab('tab-stocks', this)">Stocks</button>
             <button class="tab-btn" onclick="switchTab('tab-commandes', this)">Commandes</button>

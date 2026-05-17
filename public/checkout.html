@@ -6,6 +6,7 @@
     <title>Vérification de la commande | Terraophis</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/assets/img/favicon.ico">
 </head>
 <body class="beige-theme">
 
@@ -24,7 +25,10 @@
                             <input type="text" id="chkLine2" placeholder="Appartement, bâtiment (Optionnel)" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
                             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
                                 <input type="text" id="chkPostal" placeholder="Code postal" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
-                                <input type="text" id="chkCity" placeholder="Ville" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                                <div style="position: relative; width: 100%;">
+                                    <input type="text" id="chkCity" placeholder="Ville" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; width: 100%; box-sizing: border-box;" autocomplete="off">
+                                    <ul id="cityDropdown" style="display: none; position: absolute; width: 100%; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 6px; z-index: 1000; padding: 0; margin: 0; list-style: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></ul>
+                                </div>
                             </div>
                             <select id="chkCountry" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white;">
                                 <option value="FR">France</option>
@@ -33,6 +37,12 @@
                                 <option value="LU">Luxembourg</option>
                             </select>
                         </div>
+                    </div>
+                    
+
+                    <div id="inlineWeatherAlert" style="display: none; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid var(--border-light); text-align: center; transition: all 0.3s ease;">
+                        <h3 id="inlineWeatherTitle" style="margin-top: 0; font-family: 'Playfair Display', serif; margin-bottom: 10px;"></h3>
+                        <p id="inlineWeatherText" style="margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--accent-brown);"></p>
                     </div>
 
                     <div class="checkout-step">
@@ -50,6 +60,7 @@
                 </form>
             </div>
 
+
             <div>
                 <div class="checkout-summary">
                     <h2 style="font-family: 'Playfair Display', serif; margin-top: 0;">Résumé</h2>
@@ -63,7 +74,7 @@
                             <span id="chkSubtotal">0.00 €</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: #666;">
-                            <span>Frais de port (Vivant / Isotherme)</span>
+                            <span id="chkShippingLabel">Frais de port (Vivant / Isotherme)</span>
                             <span id="chkShipping">9.90 €</span>
                         </div>
                         <div class="summary-total">
@@ -77,7 +88,7 @@
         </div>
     </main>
 
-    <footer id="main-footer"></footer>
+<footer id="main-footer"></footer>
 
     <script type="module" src="app.js"></script>
     <script type="module">
@@ -86,10 +97,186 @@
         import { doc, getDoc, collection, addDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const SHIPPING_COST = 9.90;
+        const HEAT_PACK_COST = 3.50; // NOUVEAU : Supplément chaufferette
         let cart = [];
         let subtotal = 0;
+        let isColdWeather = false; // NOUVEAU : Traceur de météo froide
+        let isHotWeather = false;  // NOUVEAU : Traceur de météo chaude
 
-        // Vérification de sécurité et chargement des données
+        // NOUVEAU : Mise à jour dynamique des totaux
+        const updateTotals = () => {
+            let currentShipping = SHIPPING_COST;
+            let shippingText = "Frais de port (Vivant / Isotherme)";
+
+            if (isColdWeather) {
+                currentShipping += HEAT_PACK_COST;
+                shippingText = "Frais de port + Chaufferette (Vivant)";
+            }
+
+            const shippingLabel = document.getElementById('chkShippingLabel');
+            if (shippingLabel) shippingLabel.textContent = shippingText;
+            
+            document.getElementById('chkShipping').textContent = currentShipping.toFixed(2) + ' €';
+            document.getElementById('chkTotal').textContent = (subtotal + currentShipping).toFixed(2) + ' €';
+        };
+
+     // NOUVEAU : Écouteurs pour déclencher l'API quand le client tape sa ville
+        document.getElementById('chkCity').addEventListener('blur', window.checkWeather);
+        document.getElementById('chkCountry').addEventListener('change', window.checkWeather);
+        document.getElementById('chkPostal').addEventListener('blur', window.checkWeather);
+
+        // NOUVEAU : Appel à l'API prévisions (forecast) ultra-précis basé sur le CODE POSTAL
+        window.checkWeather = async () => {
+            const city = document.getElementById('chkCity').value;
+            const postalCode = document.getElementById('chkPostal').value;
+            const country = document.getElementById('chkCountry').value;
+            
+            // On s'assure d'avoir au moins la ville pour lancer la recherche
+            if (!city || city.length < 2) return;
+
+            try {
+                const API_KEY = '12e08b31287d3ae1e88369638b92d921'; // Remettre ta clé
+                
+                // 1. On interroge la destination (par code postal en priorité)
+                let destUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city},${country}&units=metric&lang=fr&appid=${API_KEY}`;
+                
+                if (postalCode) {
+                    // Le paramètre "zip=" remplace "q="
+                    destUrl = `https://api.openweathermap.org/data/2.5/forecast?zip=${postalCode},${country}&units=metric&lang=fr&appid=${API_KEY}`;
+                }
+                
+                let destRes = await fetch(destUrl);
+                
+                // PLAN B : Si le code postal n'est pas reconnu par OpenWeatherMap, on retente avec le nom de la ville
+                if (!destRes.ok && postalCode) {
+                    destRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${city},${country}&units=metric&lang=fr&appid=${API_KEY}`);
+                }
+
+                // 2. On interroge Nîmes directement par son code postal (30000)
+                const nimesRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?zip=30000,FR&units=metric&lang=fr&appid=${API_KEY}`);
+                
+                if (!destRes.ok || !nimesRes.ok) return; 
+                
+                const destData = await destRes.json();
+                const nimesData = await nimesRes.json();
+                
+                // Fonction pour extraire le min et max sur les 3 prochains jours (24 intervalles de 3h)
+                const getExtremes = (data) => {
+                    let minTemp = 100;
+                    let maxTemp = -100;
+                    const limit = Math.min(data.list.length, 24);
+                    for (let i = 0; i < limit; i++) {
+                        const temp = data.list[i].main.temp;
+                        if (temp < minTemp) minTemp = temp;
+                        if (temp > maxTemp) maxTemp = temp;
+                    }
+                    return { min: Math.round(minTemp), max: Math.round(maxTemp) };
+                };
+
+                const destTemps = getExtremes(destData);
+                const nimesTemps = getExtremes(nimesData);
+
+                const transitMinTemp = Math.min(nimesTemps.min, destTemps.min);
+                const transitMaxTemp = Math.max(nimesTemps.max, destTemps.max);
+
+                const alertBox = document.getElementById('inlineWeatherAlert');
+                const alertTitle = document.getElementById('inlineWeatherTitle');
+                const alertText = document.getElementById('inlineWeatherText');
+
+                isColdWeather = false;
+                isHotWeather = false;
+
+                alertBox.style.display = 'block';
+
+                if (transitMaxTemp >= 28) {
+                    isHotWeather = true;
+                    const hotspot = nimesTemps.max >= 28 ? "Nîmes" : city;
+                    alertTitle.textContent = "Alerte Canicule ☀️";
+                    alertText.innerHTML = `Des températures atteignant <strong>${transitMaxTemp}°C</strong> sont prévues à ${hotspot} dans les prochains jours.<br>Afin de préserver vos spécimens, les expéditions pourront être <strong>suspendues ou décalées</strong>.`;
+                    alertBox.style.backgroundColor = '#fdf3f2'; 
+                    alertBox.style.borderColor = '#eebdbb';
+                    alertTitle.style.color = '#a35d5d';
+                } 
+                else if (transitMinTemp <= 10) {
+                    isColdWeather = true;
+                    alertTitle.textContent = "Alerte Grand Froid ❄️";
+                    alertText.innerHTML = `Des températures descendant jusqu'à <strong>${transitMinTemp}°C</strong> sont prévues sur le trajet dans les jours à venir.<br>Pour garantir la survie de vos spécimens, une <strong>chaufferette (+${HEAT_PACK_COST.toFixed(2)}€)</strong> a été automatiquement ajoutée au prix de la livraison.`;
+                    alertBox.style.backgroundColor = '#f0f4f8'; 
+                    alertBox.style.borderColor = '#cce0f0';
+                    alertTitle.style.color = '#4a7599';
+                } 
+                else {
+                    alertTitle.textContent = "Conditions optimales 🌿";
+                    alertText.innerHTML = `Les prévisions pour Nîmes et ${city} sur les prochains jours sont idéales !<br>Vos insectes voyageront dans les meilleures conditions.`;
+                    alertBox.style.backgroundColor = '#f4f8f0'; 
+                    alertBox.style.borderColor = '#d4e3c5';
+                    alertTitle.style.color = '#4d5d30';
+                }
+
+                updateTotals(); 
+            } catch (error) {
+                console.error("Erreur API Météo Prévisions:", error);
+            }
+        };
+
+        // NOUVEAU : Autocomplétion avec l'API Géo du gouvernement français
+        const cityInput = document.getElementById('chkCity');
+        const postalInput = document.getElementById('chkPostal');
+        const countrySelect = document.getElementById('chkCountry');
+        const cityDropdown = document.getElementById('cityDropdown');
+        let debounceTimer;
+
+        cityInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            const query = e.target.value.trim();
+            const country = countrySelect.value;
+
+            if (country !== 'FR' || query.length < 2) {
+                cityDropdown.style.display = 'none';
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${query}&fields=codesPostaux,departement&boost=population&limit=5`);
+                    const data = await res.json();
+
+                    if (data.length > 0) {
+                        cityDropdown.innerHTML = '';
+                        data.forEach(city => {
+                            const li = document.createElement('li');
+                            li.style.cssText = 'padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; transition: background 0.2s; color: var(--accent-brown);';
+                            const mainPostalCode = city.codesPostaux[0];
+                            li.innerHTML = `<strong>${city.nom}</strong> <span style="color: #888; font-size: 0.85em;">(${mainPostalCode} - ${city.departement.nom})</span>`;
+                            
+                            li.onmouseover = () => li.style.background = '#f9f8f2';
+                            li.onmouseout = () => li.style.background = 'white';
+
+                            li.addEventListener('mousedown', (event) => {
+                                event.preventDefault(); 
+                                cityInput.value = city.nom;
+                                postalInput.value = mainPostalCode; // NOUVEAU : Écrase et remplace systématiquement le code postal existant
+                                cityDropdown.style.display = 'none';
+                                window.checkWeather();
+                            });
+                            cityDropdown.appendChild(li);
+                        });
+                        cityDropdown.style.display = 'block';
+                    } else {
+                        cityDropdown.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error("Erreur API Villes :", err);
+                }
+            }, 300); 
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target !== cityInput && e.target !== cityDropdown) {
+                cityDropdown.style.display = 'none';
+            }
+        });
+
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 window.location.href = '/connexion.html';
@@ -104,7 +291,6 @@
                 return;
             }
 
-            // Pré-remplissage du formulaire
             document.getElementById('chkName').value = user.displayName || '';
             const userSnap = await getDoc(doc(db, "users", user.uid));
             if (userSnap.exists() && userSnap.data().address) {
@@ -114,16 +300,17 @@
                 document.getElementById('chkPostal').value = addr.postalCode || '';
                 document.getElementById('chkCity').value = addr.city || '';
                 document.getElementById('chkCountry').value = addr.country || 'FR';
+                
+                // NOUVEAU : Si l'adresse est pré-remplie, on vérifie la météo direct
+                if (addr.city) window.checkWeather();
             }
 
-            // Rendu du résumé
             const container = document.getElementById('checkoutItems');
             let html = '';
             for (let i = 0; i < cart.length; i++) {
                 const pSnap = await getDoc(doc(db, "products", cart[i].id));
                 const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
                 
-                // NOUVEAU : Prise en compte du prix du lot sélectionné
                 const itemLot = cart[i].lotSize;
                 let itemPrice = pSnap.exists() ? pSnap.data().price : 0;
                 if (itemLot === 5) itemPrice = pSnap.data().price5;
@@ -142,10 +329,9 @@
             container.innerHTML = html;
 
             document.getElementById('chkSubtotal').textContent = subtotal.toFixed(2) + ' €';
-            document.getElementById('chkTotal').textContent = (subtotal + SHIPPING_COST).toFixed(2) + ' €';
+            updateTotals(); 
         });
 
-        // Validation finale et envoi vers Stripe
         document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btnFinalPay');
@@ -153,9 +339,11 @@
             btn.textContent = 'CONNEXION SÉCURISÉE... ⏳';
 
             const user = auth.currentUser;
-            const totalWithShipping = subtotal + SHIPPING_COST;
+            
+            // NOUVEAU : Prise en compte du coût météo dynamique pour l'envoi vers Stripe
+            const currentShipping = isColdWeather ? SHIPPING_COST + HEAT_PACK_COST : SHIPPING_COST;
+            const totalWithShipping = subtotal + currentShipping;
 
-            // Capture de l'adresse saisie
             const shippingAddress = {
                 line1: document.getElementById('chkLine1').value,
                 line2: document.getElementById('chkLine2').value,
@@ -165,23 +353,22 @@
             };
 
             try {
-                // Optionnel : on sauvegarde discrètement l'adresse dans le profil du client
                 await setDoc(doc(db, "users", user.uid), { address: shippingAddress }, { merge: true });
 
-                // 1. Création de la commande dans Firestore
                 const orderRef = await addDoc(collection(db, "orders"), {
                     userId: user.uid,
                     customerEmail: user.email,
                     customerName: document.getElementById('chkName').value,
                     items: cart,
-                    amountValue: totalWithShipping, // Le serveur prendra ce total incluant les frais
-                    shippingCost: SHIPPING_COST,
+                    amountValue: totalWithShipping, 
+                    shippingCost: currentShipping,
                     status: 'En attente de paiement',
                     shippingAddress: shippingAddress,
+                    hasHeatPack: isColdWeather, // NOUVEAU : Sauvegarde pour l'admin
+                    weatherWarning: isHotWeather ? 'Canicule' : (isColdWeather ? 'Grand Froid' : 'OK'), // NOUVEAU
                     createdAt: serverTimestamp()
                 });
 
-                // 2. Appel au serveur pour Stripe
                 const response = await fetch('/api/create-checkout-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

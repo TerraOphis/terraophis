@@ -26,6 +26,7 @@ onAuthStateChanged(auth, (user) => {
             loadSliderPreview();
             loadGridPreviews();
             loadGuides();
+            loadAdminWeather();
         } else {
             console.warn("Accès refusé pour :", user.email);
             // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
@@ -1188,3 +1189,35 @@ document.getElementById('editCategoryForm')?.addEventListener('submit', async (e
     loadAdminCategories();
     alert("Catégorie mise à jour avec succès ! ✏️");
 });
+
+// NOUVEAU : Fonction pour le widget météo du Panel Admin
+async function loadAdminWeather() {
+    try {
+        const API_KEY = '12e08b31287d3ae1e88369638b92d921'; // Ta clé API ici aussi
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Nîmes,FR&units=metric&lang=fr&appid=${API_KEY}`);
+        if (!response.ok) throw new Error("Erreur météo");
+        
+        const data = await response.json();
+        const temp = Math.round(data.main.temp);
+        const desc = data.weather[0].description;
+        const iconCode = data.weather[0].icon; 
+        
+        const iconEl = document.getElementById('adminWeatherIcon');
+        const tempEl = document.getElementById('adminWeatherTemp');
+        
+        if (iconEl && tempEl) {
+            iconEl.innerHTML = `<img src="https://openweathermap.org/img/wn/${iconCode}.png" style="width: 30px; height: 30px; margin-bottom: -5px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));">`;
+            
+            // Changement de couleur selon la gravité
+            let color = "var(--accent-brown)";
+            if (temp >= 28) color = "#d9534f"; // Rouge canicule
+            if (temp <= 10) color = "#4d5d30"; // Vert/Bleu pour le froid (en gardant ton code couleur)
+            
+            tempEl.innerHTML = `<span style="color: ${color}; font-size: 1rem;">${temp}°C</span> <span style="opacity: 0.7; font-weight: 400; text-transform: capitalize;">- ${desc}</span>`;
+        }
+    } catch (e) {
+        console.error("Impossible de charger la météo admin:", e);
+        const tempEl = document.getElementById('adminWeatherTemp');
+        if (tempEl) tempEl.textContent = "Météo indisponible";
+    }
+}

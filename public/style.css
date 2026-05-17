@@ -1375,7 +1375,61 @@ footer {
     }
 }
 
+/* NOUVEAU : DESIGN DE LA MODALE MÉTÉO */
+.weather-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(74, 66, 56, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
 
+.weather-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.weather-modal-content {
+    background: var(--primary-beige);
+    padding: 40px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-light);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.weather-modal.show .weather-modal-content {
+    transform: translateY(0);
+}
+
+.weather-close-modal {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 2rem;
+    color: var(--accent-brown);
+    cursor: pointer;
+    line-height: 1;
+    transition: opacity 0.2s;
+}
+
+.weather-close-modal:hover {
+    opacity: 0.6;
+}
 
 
 /* --- Responsive Mobile --- */
