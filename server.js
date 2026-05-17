@@ -12,6 +12,16 @@ const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com', // NOUVEAU : On passe sur les serveurs de Google
+    port: 465,
+    secure: true, 
+    auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+    }
+});
+
 // //////////////////////////////////////////////////
 // 🛡️ MIDDLEWARE DE SÉCURITÉ ADMIN
 // //////////////////////////////////////////////////
