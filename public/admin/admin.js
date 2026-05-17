@@ -147,7 +147,7 @@ window.closeEditModal = () => {
     document.getElementById('editUploadStatus').textContent = '';
 };
 
-// Gère l'affichage dynamique des photos existantes dans la modale
+// NOUVEAU : Gère l'affichage dynamique des photos existantes avec visibilité masquée aux extrémités
 function renderEditPhotos(photos, productId) {
     const container = document.getElementById('editPhotosPreview');
     container.innerHTML = '';
@@ -158,11 +158,24 @@ function renderEditPhotos(photos, productId) {
     }
 
     photos.forEach((url, index) => {
+        // On détermine la position de la photo
+        const isFirst = index === 0;
+        const isLast = index === photos.length - 1;
+        
         const div = document.createElement('div');
         div.className = 'edit-photo-item';
+        div.style.cssText = 'height: auto; display: flex; flex-direction: column; gap: 8px;';
+        
         div.innerHTML = `
-            <img src="${url}">
-            <button type="button" onclick="deleteProductPhoto('${productId}', ${index}, '${url}')" title="Supprimer cette photo">×</button>
+            <div style="position: relative; width: 100px; height: 100px;">
+                <img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 2px solid white;">
+                <button type="button" onclick="deleteProductPhoto('${productId}', ${index}, '${url}')" title="Supprimer cette photo" style="position: absolute; top: -8px; right: -8px; background: #a35d5d; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">×</button>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100px;">
+                <button type="button" onclick="moveProductPhoto('${productId}', ${index}, -1)" style="padding: 2px 8px; border: none; background: #e0ddd5; border-radius: 4px; color: var(--accent-brown); cursor: pointer; font-weight: bold; visibility: ${isFirst ? 'hidden' : 'visible'};" title="Déplacer à gauche">←</button>
+                
+                <button type="button" onclick="moveProductPhoto('${productId}', ${index}, 1)" style="padding: 2px 8px; border: none; background: #e0ddd5; border-radius: 4px; color: var(--accent-brown); cursor: pointer; font-weight: bold; visibility: ${isLast ? 'hidden' : 'visible'};" title="Déplacer à droite">→</button>
+            </div>
         `;
         container.appendChild(div);
     });
@@ -200,6 +213,34 @@ window.deleteProductPhoto = async (productId, photoIndex, photoUrl) => {
     } catch (error) {
         console.error("Erreur lors de la suppression de l'image :", error);
         alert("Erreur lors de la suppression de l'image.");
+    }
+};
+
+// NOUVEAU : Gère le déplacement (réorganisation) d'une photo et sauvegarde en base
+window.moveProductPhoto = async (productId, index, direction) => {
+    try {
+        const docRef = doc(db, "products", productId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            let photos = docSnap.data().photos || [];
+            const newIndex = index + direction;
+            
+            // Vérification de sécurité pour ne pas sortir du tableau
+            if (newIndex >= 0 && newIndex < photos.length) {
+                // On échange la place des deux éléments
+                [photos[index], photos[newIndex]] = [photos[newIndex], photos[index]];
+                
+                // Sauvegarde immédiate dans Firestore
+                await updateDoc(docRef, { photos: photos });
+                
+                // On rafraîchit l'affichage
+                renderEditPhotos(photos, productId);
+            }
+        }
+    } catch (error) {
+        console.error("Erreur lors de la réorganisation :", error);
+        alert("Erreur lors de la réorganisation des photos.");
     }
 };
 
