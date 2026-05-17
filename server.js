@@ -169,17 +169,17 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 }
             }
 
-            // NOUVEAU : Extraction sécurisée des détails de livraison et de contact client
             const shipping = session.shipping_details;
             const customer = session.customer_details;
+            const customerEmail = customer?.email || 'Non renseigné';
+            const customerName = shipping?.name || customer?.name || 'Inconnu';
 
             await orderRef.update({
                 status: 'Payé',
                 amountPaid: amountPaidThisSession,
                 paymentDate: admin.firestore.FieldValue.serverTimestamp(),
-                // Stockage des informations acheteur
-                customerEmail: customer?.email || 'Non renseigné',
-                customerName: shipping?.name || customer?.name || 'Inconnu',
+                customerEmail: customerEmail,
+                customerName: customerName,
                 shippingAddress: shipping ? {
                     line1: shipping.address.line1,
                     line2: shipping.address.line2 || '',
@@ -189,12 +189,32 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 } : null
             });
 
+            // NOUVEAU : Envoi automatique du mail de confirmation de commande
+            if (customerEmail !== 'Non renseigné') {
+                const mailOptions = {
+                    from: `"Terraophis" <terra.ophis@gmail.com>`,
+                    to: customerEmail,
+                    subject: `Confirmation de votre commande #${orderId.slice(0,6).toUpperCase()} 🌿`,
+                    html: `
+                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
+                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Merci pour votre commande ${customerName} !</h2>
+                            <p style="font-size: 16px; line-height: 1.5;">Votre paiement de <strong>${amountPaidThisSession}€</strong> a bien été validé.</p>
+                            <p style="font-size: 16px; line-height: 1.5;">Nous préparons vos spécimens avec soin. Vous recevrez un e-mail dès que votre colis sera en route.</p>
+                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
+                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
+                        </div>
+                    `
+                };
+                await transporter.sendMail(mailOptions);
+                console.log(`✅ Email de confirmation envoyé à ${customerEmail}`);
+            }
+
         } catch(e) {
             console.error("Erreur lors du traitement Firestore du Webhook :", e);
         }
     }
     res.json({ received: true });
-});
+}); 
 
 
 // NOUVEAU : Retrait de verifyAdmin pour autoriser les clients à valider leur panier gratuit
@@ -488,42 +508,25 @@ app.post('/api/upload-order-document', verifyAdmin, upload.single('document'), a
     }
 });
 
-app.post('/api/send-email', async (req, res) => {
+app.post('/api/send-email', verifyAdmin, async (req, res) => { // NOUVEAU : Sécurisation de la route
     try {
         const { to, subject, html, replyTo, attachments = [] } = req.body;
-        const fs = require('fs');
-        const path = require('path');
 
-        // 1. SÉCURITÉ : On bloque immédiatement si on n'a pas de destinataire
+        // NOUVEAU : On bloque immédiatement si on n'a pas de destinataire
         if (!to || to === 'undefined' || to === 'null') {
             console.error("Erreur SMTP : Aucun destinataire (to) défini.");
             return res.status(400).json({ error: "Destinataire manquant. Impossible d'envoyer l'email." });
         }
 
-        const finalAttachments = [...attachments];
-        
-        // 2. SÉCURITÉ CHEMIN : On vérifie dans /public/assets... ET dans /assets...
-        const cgvPathPublic = path.join(__dirname, 'public', 'assets', 'docs', 'CGV_M2S_Photo.pdf');
-        const cgvPathRoot = path.join(__dirname, 'assets', 'docs', 'CGV_M2S_Photo.pdf');
-
-        if (fs.existsSync(cgvPathPublic)) {
-            finalAttachments.push({ filename: 'CGV_M2S_Photo.pdf', path: cgvPathPublic });
-        } else if (fs.existsSync(cgvPathRoot)) {
-            finalAttachments.push({ filename: 'CGV_M2S_Photo.pdf', path: cgvPathRoot });
-        } else {
-            console.warn("Attention : Le fichier CGV est introuvable sur le serveur.");
-        }
-
-        // 3. On construit les options proprement
+        // NOUVEAU : Construction des options avec l'expéditeur officiel de Terraophis
         const mailOptions = {
-            from: `"M2S Photo" <${process.env.SMTP_EMAIL}>`,
+            from: `"Terraophis" <terra.ophis@gmail.com>`,
             to: to,
             subject: subject,
             html: html,
-            attachments: finalAttachments
+            attachments: attachments
         };
 
-        // On n'ajoute le replyTo que s'il existe vraiment (évite un bug Nodemailer)
         if (replyTo && replyTo !== 'undefined') {
             mailOptions.replyTo = replyTo;
         }

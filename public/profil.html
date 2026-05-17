@@ -205,16 +205,21 @@
                     if (order.items) {
                         for (const item of order.items) {
                             const pSnap = await getDoc(doc(db, "products", item.id));
-                            const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
-                            itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}</li>`;
+                            const name = pSnap.exists() ? pSnap.data().name : "Spécimen supprimé";
+                            const lotText = item.lotSize ? ` (Lot de ${item.lotSize})` : '';
+                            itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}${lotText}</li>`;
                         }
                     }
 
-                    // NOUVEAU : Création dynamique de badges de couleur selon le statut
                     let badgeColor = '#888';
                     let badgeText = order.status || 'Inconnu';
+                    let payButtonHtml = ''; // NOUVEAU
                     
-                    if (badgeText === 'En attente de paiement') badgeColor = '#e67e22'; 
+                    if (badgeText === 'En attente de paiement') {
+                        badgeColor = '#e67e22'; 
+                        // NOUVEAU : Bouton pour relancer Stripe
+                        payButtonHtml = `<button onclick="window.resumePayment('${orderDoc.id}')" style="background: #4d5d30; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">Payer la commande</button>`;
+                    }
                     else if (badgeText === 'Payé' || badgeText === 'En préparation') badgeColor = '#3498db'; 
                     else if (badgeText === 'Expédié') badgeColor = '#2ecc71'; 
 
@@ -226,8 +231,9 @@
                             <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px;">${badgeText.toUpperCase()}</span>
                         </div>
                         <ul style="margin:0 0 15px 0; padding-left:20px; font-size:0.9rem; line-height:1.4;">${itemsHtml}</ul>
-                        <div style="text-align:right; font-weight:600; font-size:1rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 10px;">
-                            Total : ${order.amountValue ? order.amountValue.toFixed(2) : 0} €
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 10px;">
+                            <strong style="font-size:1rem; color: var(--accent-brown);">Total : ${order.amountValue ? order.amountValue.toFixed(2) : 0} €</strong>
+                            ${payButtonHtml}
                         </div>
                     `;
                     container.appendChild(div);
@@ -237,6 +243,33 @@
                 container.innerHTML = '<p>Erreur lors du chargement de l\'historique.</p>';
             }
         }
+
+        // NOUVEAU : Fonction pour rappeler l'API de paiement
+        window.resumePayment = async (orderId) => {
+            try {
+                const user = auth.currentUser;
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        orderId: orderId,
+                        userEmail: user.email
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert("Erreur lors de la création de la session : " + (data.error || "Inconnue"));
+                }
+            } catch (error) {
+                console.error("Erreur de reprise du paiement :", error);
+                alert("Une erreur de connexion est survenue.");
+            }
+        };
+        
         window.logoutCustomer = () => {
             signOut(auth).then(() => { window.location.href = '/'; });
         };

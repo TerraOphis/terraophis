@@ -381,7 +381,6 @@ window.renderCart = async () => {
                 const p = docSnap.data();
                 const itemLot = cart[i].lotSize;
                 
-                // NOUVEAU : Récupération dynamique du prix depuis l'objet ou rétrocompatibilité
                 let itemPrice = 0;
                 if (p.prices && p.prices[itemLot] !== undefined) {
                     itemPrice = p.prices[itemLot];
@@ -390,33 +389,40 @@ window.renderCart = async () => {
                 }
 
                 const multiplier = itemLot || 1;
+                
+                // Si la quantité demandée dépasse le stock réel, on l'ajuste
                 if ((cart[i].quantity * multiplier) > p.stock) {
                     cart[i].quantity = Math.floor(p.stock / multiplier);
-                    localStorage.setItem('terraophis_cart', JSON.stringify(cart));
                 }
                 
-                if (cart[i].quantity > 0) {
-                    const itemTotal = itemPrice * cart[i].quantity;
-                    total += itemTotal;
-                    const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
-                    const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
+                // NOUVEAU : Si après ajustement la quantité est de 0 (ou moins), on supprime l'article !
+                if (cart[i].quantity <= 0) {
+                    cart.splice(i, 1);
+                    localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+                    i--; // On recule d'un cran car on vient de raccourcir le tableau
+                    continue; // On passe au produit suivant
+                }
+                
+                const itemTotal = itemPrice * cart[i].quantity;
+                total += itemTotal;
+                const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
+                const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
 
-                    html += `
-                        <div class="cart-item" style="position: relative;">
-                            <img src="${photo}" alt="${p.name}">
-                            <div class="cart-item-details">
-                                <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
-                                <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
-                                <p class="cart-item-price">${itemPrice} €</p>
-                                <div class="cart-qty-controls">
-                                    <button onclick="updateCartQty('${cart[i].cartId}', -1, ${p.stock})">-</button>
-                                    <span>${cart[i].quantity}</span>
-                                    <button onclick="updateCartQty('${cart[i].cartId}', 1, ${p.stock})">+</button>
-                                </div>
+                html += `
+                    <div class="cart-item" style="position: relative;">
+                        <img src="${photo}" alt="${p.name}">
+                        <div class="cart-item-details">
+                            <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+                            <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
+                            <p class="cart-item-price">${itemPrice} €</p>
+                            <div class="cart-qty-controls">
+                                <button onclick="updateCartQty('${cart[i].cartId}', -1, ${p.stock})">-</button>
+                                <span>${cart[i].quantity}</span>
+                                <button onclick="updateCartQty('${cart[i].cartId}', 1, ${p.stock})">+</button>
                             </div>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
             }
         } catch (e) { console.error("Erreur panier :", e); }
     }

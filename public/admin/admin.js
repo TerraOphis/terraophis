@@ -498,11 +498,67 @@ async function loadOrders() {
     }
 }
 
-// NOUVEAU : Fonction pour mettre à jour le statut en base de données
 window.updateOrderStatus = async (id, newStatus) => {
     try {
-        await updateDoc(doc(db, "orders", id), { status: newStatus });
-        // Optionnel : Tu pourras ajouter ici l'envoi d'un email automatique au client pour le prévenir de l'expédition
+        const orderRef = doc(db, "orders", id);
+        const orderSnap = await getDoc(orderRef);
+
+        await updateDoc(orderRef, { status: newStatus });
+
+        // NOUVEAU : Logique d'envoi d'e-mail automatisée selon le statut
+        if (orderSnap.exists()) {
+            const order = orderSnap.data();
+            const email = order.customerEmail;
+            const name = order.customerName || 'Client';
+
+            if (email && email !== 'Anonyme' && email !== 'Non renseigné') {
+                let subject = '';
+                let htmlContent = '';
+
+                if (newStatus === 'Expédié') {
+                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en route ! 📦`;
+                    htmlContent = `
+                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
+                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Bonne nouvelle ${name} !</h2>
+                            <p style="font-size: 16px; line-height: 1.5;">Votre commande <strong>#${id.slice(0,6).toUpperCase()}</strong> a été confiée à notre transporteur et est actuellement en route vers vous.</p>
+                            <p style="font-size: 16px; line-height: 1.5;">Vos spécimens voyagent avec le plus grand soin. Préparez leurs habitats ! 🌿</p>
+                            <p style="font-size: 16px; line-height: 1.5;">N'hésitez pas à consulter nos fiches conseils sur le site pour préparer au mieux leur acclimatation.</p>
+                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
+                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
+                        </div>
+                    `;
+                } else if (newStatus === 'En préparation') {
+                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en préparation 🌿`;
+                    htmlContent = `
+                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
+                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Bonjour ${name},</h2>
+                            <p style="font-size: 16px; line-height: 1.5;">Nous vous confirmons que votre commande <strong>#${id.slice(0,6).toUpperCase()}</strong> est actuellement en cours de préparation avec la plus grande attention.</p>
+                            <p style="font-size: 16px; line-height: 1.5;">Nous vous enverrons un nouvel e-mail dès que celle-ci sera remise au transporteur.</p>
+                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
+                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
+                        </div>
+                    `;
+                }
+
+                if (subject && htmlContent) {
+                    const token = await auth.currentUser.getIdToken();
+                    await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            to: email,
+                            subject: subject,
+                            html: htmlContent
+                        })
+                    });
+                    console.log(`✅ Email envoyé à ${email} pour le statut : ${newStatus}`);
+                }
+            }
+        }
+        alert("Statut mis à jour avec succès !");
     } catch (error) {
         console.error("Erreur mise à jour statut :", error);
         alert("Erreur lors de la mise à jour du statut.");

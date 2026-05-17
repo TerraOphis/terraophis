@@ -307,14 +307,24 @@
 
             const container = document.getElementById('checkoutItems');
             let html = '';
+            let validCart = []; // NOUVEAU : Pour nettoyer le panier si besoin
+
             for (let i = 0; i < cart.length; i++) {
+                if(cart[i].quantity <= 0) continue; // On ignore les articles à 0
+                validCart.push(cart[i]);
+
                 const pSnap = await getDoc(doc(db, "products", cart[i].id));
                 const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
                 
                 const itemLot = cart[i].lotSize;
                 let itemPrice = pSnap.exists() ? pSnap.data().price : 0;
-                if (itemLot === 5) itemPrice = pSnap.data().price5;
-                if (itemLot === 10) itemPrice = pSnap.data().price10;
+                
+                if (pSnap.exists() && pSnap.data().prices && pSnap.data().prices[itemLot] !== undefined) {
+                    itemPrice = pSnap.data().prices[itemLot];
+                } else if (pSnap.exists()) {
+                    if (itemLot === 5) itemPrice = pSnap.data().price5;
+                    if (itemLot === 10) itemPrice = pSnap.data().price10;
+                }
 
                 const itemTotal = itemPrice * cart[i].quantity;
                 const lotText = itemLot ? ` (Lot de ${itemLot})` : '';
@@ -327,6 +337,12 @@
                 `;
             }
             container.innerHTML = html;
+
+            // On sauvegarde le panier nettoyé
+            if(validCart.length !== cart.length) {
+                cart = validCart;
+                localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+            }
 
             document.getElementById('chkSubtotal').textContent = subtotal.toFixed(2) + ' €';
             updateTotals(); 
