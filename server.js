@@ -153,9 +153,12 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         try {
             const orderRef = admin.firestore().collection('orders').doc(orderId);
             const orderSnap = await orderRef.get();
+            let weatherWarning = 'OK';
             
             if (orderSnap.exists) {
                 const orderData = orderSnap.data();
+                weatherWarning = orderData.weatherWarning || 'OK';
+
                 if (orderData.items && orderData.items.length > 0) {
                     const batch = admin.firestore().batch();
                     for (const item of orderData.items) {
@@ -172,7 +175,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             const shipping = session.shipping_details;
             const customer = session.customer_details;
             const customerEmail = customer?.email || 'Non renseigné';
-            const customerName = shipping?.name || customer?.name || 'Inconnu';
+            const customerName = shipping?.name || customer?.name || 'Client';
 
             await orderRef.update({
                 status: 'Payé',
@@ -189,19 +192,61 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 } : null
             });
 
-            // NOUVEAU : Envoi automatique du mail de confirmation de commande
             if (customerEmail !== 'Non renseigné') {
+                // Configuration dynamique du message selon la météo lors de la commande
+                let weatherAlertHtml = '';
+
+                if (weatherWarning === 'Canicule') {
+                    weatherAlertHtml = `
+                        <div style="background-color: #fdf3f2; border: 1px solid #eebdbb; padding: 18px; border-radius: 8px; margin: 20px 0; text-align: left;">
+                            <h4 style="margin: 0 0 5px 0; color: #a35d5d; font-size: 15px; font-family: 'Helvetica Neue', Arial, sans-serif;">☀️ Alerte Canicule active</h4>
+                            <p style="margin: 0; font-size: 14px; color: #4a4238; line-height: 1.5;">
+                                En raison des fortes chaleurs actuelles sur l'itinéraire de transport, les expéditions de vos animaux pourront être <strong>suspendues ou décalées</strong>. Nous ajustons nos départs au jour le jour pour leur confort thermique absolu. Un e-mail de notification vous sera envoyé dès que vos spécimens prendront la route !
+                            </p>
+                        </div>
+                    `;
+                } else if (weatherWarning === 'Grand Froid') {
+                    weatherAlertHtml = `
+                        <div style="background-color: #f0f4f8; border: 1px solid #cce0f0; padding: 18px; border-radius: 8px; margin: 20px 0; text-align: left;">
+                            <h4 style="margin: 0 0 5px 0; color: #4a7599; font-size: 15px; font-family: 'Helvetica Neue', Arial, sans-serif;">❄️ Protection Grand Froid activée</h4>
+                            <p style="margin: 0; font-size: 14px; color: #4a4238; line-height: 1.5;">
+                                Les températures étant basses sur le trajet, une <strong>chaufferette isotherme</strong> a été automatiquement ajoutée à votre colis. Elle diffusera une chaleur douce pour maintenir vos spécimens à une température idéale pendant tout leur voyage.
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    weatherAlertHtml = `
+                        <div style="background-color: #f4f8f0; border: 1px solid #d4e3c5; padding: 18px; border-radius: 8px; margin: 20px 0; text-align: left;">
+                            <h4 style="margin: 0 0 5px 0; color: #4d5d30; font-size: 15px; font-family: 'Helvetica Neue', Arial, sans-serif;">🌿 Conditions de transport idéales</h4>
+                            <p style="margin: 0; font-size: 14px; color: #4a4238; line-height: 1.5;">
+                                Les prévisions météo actuelles sur le trajet sont optimales. Vos spécimens voyageront depuis notre élevage de Nîmes dans les meilleures dispositions possibles.
+                            </p>
+                        </div>
+                    `;
+                }
+
                 const mailOptions = {
                     from: `"Terraophis" <terra.ophis@gmail.com>`,
                     to: customerEmail,
                     subject: `Confirmation de votre commande #${orderId.slice(0,6).toUpperCase()} 🌿`,
                     html: `
-                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
-                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Merci pour votre commande ${customerName} !</h2>
-                            <p style="font-size: 16px; line-height: 1.5;">Votre paiement de <strong>${amountPaidThisSession}€</strong> a bien été validé.</p>
-                            <p style="font-size: 16px; line-height: 1.5;">Nous préparons vos spécimens avec soin. Vous recevrez un e-mail dès que votre colis sera en route.</p>
-                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
-                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
+                        <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+                            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
+                                <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
+                                    <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 2px;">TERRAOPHIS</h1>
+                                    <p style="color: #eadb9d; margin: 5px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Boutique d'Arthropodes & Insectes de collection</p>
+                                </div>
+                                <div style="padding: 35px; color: #4a4238; text-align: center;">
+                                    <h2 style="font-size: 20px; margin-top: 0; color: #4a4238; font-weight: 600;">Merci pour votre commande, ${customerName} !</h2>
+                                    <p style="font-size: 15px; line-height: 1.6; color: #555;">Nous vous confirmons la bonne validation de votre règlement de <strong>${amountPaidThisSession.toFixed(2)} €</strong> pour la commande <strong>#${orderId.slice(0,6).toUpperCase()}</strong>.</p>
+                                    
+                                    ${weatherAlertHtml}
+
+                                    <p style="font-size: 15px; line-height: 1.6; color: #555; margin-top: 25px;">Toute notre équipe s'active pour préparer vos boîtes et contenants d'expédition de façon sécurisée.</p>
+                                    <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
+                                    <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">À très bientôt sur Terraophis,<br>L'élevage passionné.</p>
+                                </div>
+                            </div>
                         </div>
                     `
                 };
@@ -214,7 +259,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         }
     }
     res.json({ received: true });
-}); 
+});
 
 
 // NOUVEAU : Retrait de verifyAdmin pour autoriser les clients à valider leur panier gratuit

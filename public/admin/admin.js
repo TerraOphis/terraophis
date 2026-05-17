@@ -505,7 +505,6 @@ window.updateOrderStatus = async (id, newStatus) => {
 
         await updateDoc(orderRef, { status: newStatus });
 
-        // NOUVEAU : Logique d'envoi d'e-mail automatisée selon le statut
         if (orderSnap.exists()) {
             const order = orderSnap.data();
             const email = order.customerEmail;
@@ -513,34 +512,41 @@ window.updateOrderStatus = async (id, newStatus) => {
 
             if (email && email !== 'Anonyme' && email !== 'Non renseigné') {
                 let subject = '';
-                let htmlContent = '';
+                let statusTitle = '';
+                let statusText = '';
 
-                if (newStatus === 'Expédié') {
-                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en route ! 📦`;
-                    htmlContent = `
-                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
-                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Bonne nouvelle ${name} !</h2>
-                            <p style="font-size: 16px; line-height: 1.5;">Votre commande <strong>#${id.slice(0,6).toUpperCase()}</strong> a été confiée à notre transporteur et est actuellement en route vers vous.</p>
-                            <p style="font-size: 16px; line-height: 1.5;">Vos spécimens voyagent avec le plus grand soin. Préparez leurs habitats ! 🌿</p>
-                            <p style="font-size: 16px; line-height: 1.5;">N'hésitez pas à consulter nos fiches conseils sur le site pour préparer au mieux leur acclimatation.</p>
-                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
-                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
-                        </div>
-                    `;
-                } else if (newStatus === 'En préparation') {
+                if (newStatus === 'En préparation') {
                     subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en préparation 🌿`;
-                    htmlContent = `
-                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 20px auto; background-color: #f9f8f2; padding: 30px; border-radius: 8px; border: 1px solid #e0ddd5; color: #4a4238;">
-                            <h2 style="color: #4d5d30; text-align: center; font-family: 'Playfair Display', serif;">Bonjour ${name},</h2>
-                            <p style="font-size: 16px; line-height: 1.5;">Nous vous confirmons que votre commande <strong>#${id.slice(0,6).toUpperCase()}</strong> est actuellement en cours de préparation avec la plus grande attention.</p>
-                            <p style="font-size: 16px; line-height: 1.5;">Nous vous enverrons un nouvel e-mail dès que celle-ci sera remise au transporteur.</p>
-                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 20px 0;">
-                            <p style="color: #888; font-size: 13px; text-align: center;">L'équipe Terraophis</p>
-                        </div>
-                    `;
+                    statusTitle = `Préparation en cours...`;
+                    statusText = `Votre sélection d'insectes et arthropodes est actuellement prise en charge au sein de notre élevage. Nous composons votre colis avec le plus grand soin en veillant aux paramètres d'aération et d'isothermie nécessaires à leur bien-être. Vous recevrez un nouvel e-mail dès la remise de vos spécimens au transporteur.`;
+                } else if (newStatus === 'Expédié') {
+                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en route ! 📦`;
+                    statusTitle = `Vos spécimens voyagent !`;
+                    statusText = `Bonne nouvelle ! Votre colis a été remis à notre transporteur partenaire. Vos spécimens voyagent dans des conditions adaptées et sécurisées. Veillez à bien préparer leurs terrariums ou vivariums d'accueil afin de garantir une acclimatation douce dès leur arrivée.`;
                 }
 
-                if (subject && htmlContent) {
+                if (subject && statusText) {
+                    const htmlTemplate = `
+                        <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+                            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
+                                <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
+                                    <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 2px;">TERRAOPHIS</h1>
+                                    <p style="color: #eadb9d; margin: 5px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Suivi de votre commande</p>
+                                </div>
+                                <div style="padding: 35px; color: #4a4238; text-align: center;">
+                                    <h2 style="font-size: 20px; margin-top: 0; color: #4d5d30; font-weight: 600;">${statusTitle}</h2>
+                                    <p style="font-size: 15px; line-height: 1.6; color: #555; text-align: left; background: #faf9f5; padding: 20px; border-radius: 8px; border-left: 3px solid #4d5d30;">
+                                        Bonjour ${name},<br><br>
+                                        ${statusText}
+                                    </p>
+                                    <p style="font-size: 14px; color: #666; margin-top: 25px;">Numéro de suivi et historique disponibles dans votre espace client.</p>
+                                    <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
+                                    <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">L'équipe Terraophis</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
                     const token = await auth.currentUser.getIdToken();
                     await fetch('/api/send-email', {
                         method: 'POST',
@@ -551,14 +557,14 @@ window.updateOrderStatus = async (id, newStatus) => {
                         body: JSON.stringify({
                             to: email,
                             subject: subject,
-                            html: htmlContent
+                            html: htmlTemplate
                         })
                     });
-                    console.log(`✅ Email envoyé à ${email} pour le statut : ${newStatus}`);
+                    console.log(`✅ Email de statut envoyé à ${email} pour le statut : ${newStatus}`);
                 }
             }
         }
-        alert("Statut mis à jour avec succès !");
+        alert("Statut mis à jour avec succès et e-mail envoyé !");
     } catch (error) {
         console.error("Erreur mise à jour statut :", error);
         alert("Erreur lors de la mise à jour du statut.");
