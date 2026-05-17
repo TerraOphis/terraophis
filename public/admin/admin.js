@@ -27,6 +27,7 @@ onAuthStateChanged(auth, (user) => {
             loadGridPreviews();
             loadGuides();
             loadAdminWeather();
+            loadAboutPageAdmin()
         } else {
             console.warn("Accès refusé pour :", user.email);
             // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
@@ -1221,3 +1222,206 @@ async function loadAdminWeather() {
         if (tempEl) tempEl.textContent = "Météo indisponible";
     }
 }
+
+async function loadAboutPageAdmin() {
+    const teamField = document.getElementById('aboutTopTeamText');
+    if (!teamField) return;
+
+    try {
+        const docSnap = await getDoc(doc(db, "settings", "aboutPage"));
+        if (!docSnap.exists()) return;
+
+        const data = docSnap.data();
+        document.getElementById('aboutTopTeamText').value = data.topTeamText || '';
+        document.getElementById('aboutPassionText').value = data.passionText || '';
+        document.getElementById('aboutObjectifText').value = data.objectifText || '';
+
+        // Affichage de la galerie supérieure
+        const topGalleryPreview = document.getElementById('aboutTopGalleryPreview');
+        const topGallery = data.topGallery || [];
+        topGalleryPreview.innerHTML = topGallery.map((url, idx) => `
+            <div class="preview-item" style="position:relative; display:inline-block; margin-right:10px;">
+                <img src="${url}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
+                <button type="button" onclick="deleteAboutGalleryImg('topGallery', ${idx})" style="position:absolute; top:-5px; right:-5px; background:#d9534f; color:white; border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; font-size:12px; line-height:15px; text-align:center;">×</button>
+            </div>
+        `).join('');
+
+        // Affichage de la galerie inférieure
+        const bottomGalleryPreview = document.getElementById('aboutBottomGalleryPreview');
+        const bottomGallery = data.bottomGallery || [];
+        bottomGalleryPreview.innerHTML = bottomGallery.map((url, idx) => `
+            <div class="preview-item" style="position:relative; display:inline-block; margin-right:10px;">
+                <img src="${url}" style="width:100px; height:70px; object-fit:cover; border-radius:4px;">
+                <button type="button" onclick="deleteAboutGalleryImg('bottomGallery', ${idx})" style="position:absolute; top:-5px; right:-5px; background:#d9534f; color:white; border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; font-size:12px; line-height:15px; text-align:center;">×</button>
+            </div>
+        `).join('');
+
+        // Rendu du gestionnaire de l'équipe
+        const teamListContainer = document.getElementById('adminTeamList');
+        const members = data.members || [];
+        if (members.length === 0) {
+            teamListContainer.innerHTML = '<p style="font-size:0.9rem; color:#888; font-style:italic;">Aucun membre configuré.</p>';
+        } else {
+            teamListContainer.innerHTML = members.map((m, idx) => `
+                <div class="inventory-item" style="display:grid; grid-template-columns: 60px 2fr 2fr auto; align-items: center; background: white; padding: 10px; border-radius: 6px; border:1px solid #eee; margin-bottom:8px;">
+                    <img src="${m.photo || '../assets/img/placeholder.jpg'}" style="width:45px; height:45px; border-radius:50%; object-fit:cover;">
+                    <div><strong>${m.name}</strong></div>
+                    <div style="color:#666; font-size:0.9rem;">${m.role}</div>
+                    <button type="button" onclick="deleteTeamMember(${idx})" style="padding: 5px 10px; background:#d9534f; color:white; border:none; border-radius:4px; font-size:0.85rem; cursor:pointer;">Supprimer</button>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        console.error("Erreur d'initialisation À Propos :", err);
+    }
+}
+
+// NOUVEAU : Intercepte la validation pour uploader les fichiers dans leurs tableaux respectifs
+document.getElementById('aboutPageForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitAbout');
+    const statusText = document.getElementById('aboutStatusMsg');
+    const topFiles = document.getElementById('aboutTopGalleryFiles').files;
+    const bottomFiles = document.getElementById('aboutBottomGalleryFiles').files;
+
+    try {
+        btn.disabled = true;
+        statusText.textContent = "Sauvegarde en cours... ⏳";
+
+        const docRef = doc(db, "settings", "aboutPage");
+        const docSnap = await getDoc(docRef);
+        let currentTopGallery = docSnap.exists() ? (docSnap.data().topGallery || []) : [];
+        let currentBottomGallery = docSnap.exists() ? (docSnap.data().bottomGallery || []) : [];
+
+        const token = await auth.currentUser.getIdToken();
+
+        // Envoi des images de la galerie haute
+        if (topFiles.length > 0) {
+            statusText.textContent = "Téléchargement de la galerie haute... ⏳";
+            const uploadData = new FormData();
+            for (let i = 0; i < topFiles.length; i++) { uploadData.append('photos', topFiles[i]); }
+            
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: uploadData
+            });
+            if (!response.ok) throw new Error("Échec upload galerie haute");
+            const { files: uploadedFiles } = await response.json();
+            currentTopGallery = [...currentTopGallery, ...uploadedFiles.map(f => f.url)];
+        }
+
+        // Envoi des images de la galerie basse
+        if (bottomFiles.length > 0) {
+            statusText.textContent = "Téléchargement de la galerie basse... ⏳";
+            const uploadData = new FormData();
+            for (let i = 0; i < bottomFiles.length; i++) { uploadData.append('photos', bottomFiles[i]); }
+            
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: uploadData
+            });
+            if (!response.ok) throw new Error("Échec upload galerie basse");
+            const { files: uploadedFiles } = await response.json();
+            currentBottomGallery = [...currentBottomGallery, ...uploadedFiles.map(f => f.url)];
+        }
+
+        await setDoc(docRef, {
+            topTeamText: document.getElementById('aboutTopTeamText').value.trim(),
+            passionText: document.getElementById('aboutPassionText').value.trim(),
+            objectifText: document.getElementById('aboutObjectifText').value.trim(),
+            topGallery: currentTopGallery,
+            bottomGallery: currentBottomGallery
+        }, { merge: true });
+
+        statusText.textContent = "✅ Contenu structurel et galeries mis à jour !";
+        document.getElementById('aboutTopGalleryFiles').value = '';
+        document.getElementById('aboutBottomGalleryFiles').value = '';
+        loadAboutPageAdmin();
+    } catch (err) {
+        console.error(err);
+        statusText.textContent = "❌ Erreur : " + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// NOUVEAU : Supprime une image d'un tableau spécifique à l'aide de sa clé
+window.deleteAboutGalleryImg = async (galleryKey, index) => {
+    if (!confirm("Supprimer cette image de la galerie ?")) return;
+    try {
+        const docRef = doc(db, "settings", "aboutPage");
+        const docSnap = await getDoc(docRef);
+        const gallery = docSnap.data()[galleryKey] || [];
+        
+        gallery.splice(index, 1);
+        await updateDoc(docRef, { [galleryKey]: gallery });
+        loadAboutPageAdmin();
+    } catch (e) { console.error(e); }
+};
+
+// NOUVEAU : Ajout d'un membre à l'équipe avec photo dédiée
+window.addTeamMember = async () => {
+    const name = document.getElementById('newMemberName').value.trim();
+    const role = document.getElementById('newMemberRole').value.trim();
+    const fileInput = document.getElementById('newMemberFile');
+    const btn = document.getElementById('btnAddMember');
+
+    if (!name || !role) return alert("Veuillez remplir le nom et le rôle du membre.");
+
+    try {
+        btn.disabled = true;
+        let photoUrl = '';
+
+        if (fileInput.files.length > 0) {
+            const uploadData = new FormData();
+            uploadData.append('photos', fileInput.files[0]);
+            
+            const token = await auth.currentUser.getIdToken();
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: uploadData
+            });
+
+            if (!response.ok) throw new Error("Échec du téléversement de la photo de profil");
+            const { files: uploadedFiles } = await response.json();
+            photoUrl = uploadedFiles[0].url;
+        }
+
+        const docRef = doc(db, "settings", "aboutPage");
+        const docSnap = await getDoc(docRef);
+        const members = docSnap.exists() ? (docSnap.data().members || []) : [];
+
+        members.push({ name, role, photo: photoUrl });
+        await setDoc(docRef, { members }, { merge: true });
+
+        // Nettoyage des champs de saisie
+        document.getElementById('newMemberName').value = '';
+        document.getElementById('newMemberRole').value = '';
+        fileInput.value = '';
+        
+        loadAboutPageAdmin();
+        alert("✅ Membre d'équipe ajouté avec succès !");
+    } catch (err) {
+        console.error(err);
+        alert("Erreur lors de l'ajout : " + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+// NOUVEAU : Suppression d'un membre de l'équipe
+window.deleteTeamMember = async (index) => {
+    if (!confirm("Voulez-vous retirer ce membre de l'équipe ?")) return;
+    try {
+        const docRef = doc(db, "settings", "aboutPage");
+        const docSnap = await getDoc(docRef);
+        const members = docSnap.data().members || [];
+        
+        members.splice(index, 1);
+        await updateDoc(docRef, { members: members });
+        loadAboutPageAdmin();
+    } catch (e) { console.error(e); }
+};

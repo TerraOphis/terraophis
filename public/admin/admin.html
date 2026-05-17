@@ -131,6 +131,62 @@
                     </div>
                 </div>
             </section>
+
+            <section class="admin-section">
+                <h2>Gestion de la page "À Propos" (Nouveau Layout)</h2>
+                <form id="aboutPageForm" class="product-form">
+                    
+                    <h3 style="color: var(--accent-brown); margin-bottom: 5px;">1. Introduction : Présentation de l'équipe</h3>
+                    <textarea id="aboutTopTeamText" placeholder="Texte de présentation générale de l'équipe (affiché en haut et en bas)..." rows="4" required></textarea>
+                    
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">2. Première Galerie d'images (Sous l'introduction)</h3>
+                    <div id="aboutTopGalleryPreview" class="admin-img-preview-grid"></div>
+                    <div class="file-input-area">
+                        <label for="aboutTopGalleryFiles">Ajouter des photos à la galerie haute</label>
+                        <input type="file" id="aboutTopGalleryFiles" multiple accept="image/*">
+                    </div>
+
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">3. Blocs Côte à Côte : Passion & Objectif</h3>
+                    <div class="form-group">
+                        <div>
+                            <label style="font-weight: 600; color: var(--accent-brown); display:block; margin-bottom:5px;">Une passion devenue projet</label>
+                            <textarea id="aboutPassionText" placeholder="Texte de la section Passion..." rows="6" required></textarea>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; color: var(--accent-brown); display:block; margin-bottom:5px;">Notre objectif</label>
+                            <textarea id="aboutObjectifText" placeholder="Texte de la section Objectif..." rows="6" required></textarea>
+                        </div>
+                    </div>
+                    
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">4. Deuxième Galerie d'images (Sous le côte à côte)</h3>
+                    <div id="aboutBottomGalleryPreview" class="admin-img-preview-grid"></div>
+                    <div class="file-input-area">
+                        <label for="aboutBottomGalleryFiles">Ajouter des photos à la galerie basse</label>
+                        <input type="file" id="aboutBottomGalleryFiles" multiple accept="image/*">
+                    </div>
+
+                    <button type="submit" id="btnSubmitAbout" class="btn-buy" style="margin-top: 20px; width: 100%;">SAUVEGARDER LE CONTENU STRUCTUREL & GALERIES</button>
+                    <p id="aboutStatusMsg" style="text-align: center; font-weight: 500;"></p>
+                </form>
+
+                <hr style="border: none; border-top: 1px solid var(--border-light); margin: 40px 0;">
+
+                <h3 style="color: var(--accent-brown); margin-bottom: 15px;">5. Trombinoscope : Les membres de l'équipe</h3>
+                <div id="adminTeamList" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;"></div>
+                
+                <div style="background: #faf9f5; padding: 20px; border-radius: 8px; border: 1px solid var(--border-light);">
+                    <h4 style="margin-top: 0; color: var(--accent-brown);">Ajouter un membre à l'équipe</h4>
+                    <div class="form-group">
+                        <input type="text" id="newMemberName" placeholder="Prénom / Nom (ex: Franck)">
+                        <input type="text" id="newMemberRole" placeholder="Description courte (ex: Co-équipier)">
+                    </div>
+                    <div class="file-input-area" style="margin-top: 10px;">
+                        <label for="newMemberFile">Photo du membre</label>
+                        <input type="file" id="newMemberFile" accept="image/*">
+                    </div>
+                    <button type="button" onclick="addTeamMember()" id="btnAddMember" class="btn-buy" style="margin-top: 15px; padding: 10px 20px; font-size: 0.9rem;">AJOUTER CE MEMBRE</button>
+                </div>
+            </section>
         </div>
 
         <div id="tab-categories" class="tab-content" style="display:none;">
