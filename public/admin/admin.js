@@ -530,8 +530,8 @@ window.updateOrderStatus = async (id, newStatus) => {
                         <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
                             <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
                                 <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
-                                    <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 2px;">TERRAOPHIS</h1>
-                                    <p style="color: #eadb9d; margin: 5px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Suivi de votre commande</p>
+                                    <img src="https://working.terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                                    <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Suivi de votre commande</p>
                                 </div>
                                 <div style="padding: 35px; color: #4a4238; text-align: center;">
                                     <h2 style="font-size: 20px; margin-top: 0; color: #4d5d30; font-weight: 600;">${statusTitle}</h2>
