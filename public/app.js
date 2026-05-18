@@ -208,6 +208,18 @@ async function loadCatalogue() {
         sortSelect?.addEventListener('change', filterAndSort);
         categoryFilter?.addEventListener('change', filterAndSort);
 
+        // NOUVEAU : Switcher de structure de la grille sur mobile
+        const mobileGridSelector = document.getElementById('mobileGridSelector');
+        if (mobileGridSelector && productGrid) {
+            // On lui applique la classe initiale de 2 par ligne
+            productGrid.classList.add(mobileGridSelector.value);
+            
+            mobileGridSelector.addEventListener('change', (e) => {
+                // On met à jour proprement la classe de la grille au changement de valeur
+                productGrid.className = `product-grid ${e.target.value}`;
+            });
+        }
+
         filterAndSort();
 
     } catch (error) {

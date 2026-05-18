@@ -223,6 +223,10 @@ body.beige-theme {
     opacity: 0.7;
 }
 
+.mobile-only-control {
+    display: none !important;
+}
+
 /* NOUVEAU : Styles pour le menu déroulant (Dropdown) */
 .dropdown {
     position: relative;
@@ -697,7 +701,10 @@ footer {
 .cart-sidebar {
     position: fixed;
     top: 0; right: -400px; /* Caché par défaut en dehors de l'écran */
-    width: 100%; max-width: 400px; height: 100vh;
+    width: 100%; max-width: 400px; 
+    /* NOUVEAU : 100dvh gère dynamiquement l'apparition de la barre de navigation mobile */
+    height: 100vh;
+    height: 100dvh;
     background: var(--primary-beige);
     z-index: 1004;
     box-shadow: -5px 0 25px rgba(0,0,0,0.1);
@@ -717,6 +724,8 @@ footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* NOUVEAU : Empêche l'en-tête de se réduire quand le milieu scrolle */
+    flex-shrink: 0;
 }
 
 .cart-header h2 {
@@ -770,6 +779,8 @@ footer {
 .cart-footer {
     padding: 20px; background: var(--soft-white);
     border-top: 1px solid var(--border-light);
+    /* NOUVEAU : Empêche le pied de page et le bouton d'être repoussés hors de l'écran */
+    flex-shrink: 0; 
 }
 
 .cart-total {
@@ -1618,6 +1629,11 @@ footer {
         font-size: 1.6rem;
     }
 
+    /* NOUVEAU : On abaisse le bouton sous l'overlay vert sur mobile pour éviter la superposition */
+    .btn-explorer {
+        top: 76% !important;
+    }
+
     .product-details-container {
         grid-template-columns: 1fr !important;
         gap: 20px !important;
@@ -1631,13 +1647,40 @@ footer {
     .shop-controls input, 
     .shop-controls select {
         width: 100% !important;
+        /* NOUVEAU : Sécurise la largeur pour éviter le débordement horizontal */
+        box-sizing: border-box;
     }
 
-    /* Footer Responsive */
+    /* NOUVEAU : Réduction des marges intérieures massives sur mobile */
+    .products-section {
+        padding: 20px;
+    }
+    
+    .profile-box {
+        padding: 20px;
+    }
+
+    .form-address input, .form-address select {
+        box-sizing: border-box;
+        width: 100%;
+    }
+
+    /* --- NOUVEAU : Footer Responsive et plus compact --- */
+    footer {
+        padding: 40px 0 20px 0;
+        margin-top: 30px;
+    }
+
     .footer-container {
         flex-direction: column;
-        gap: 40px;
+        gap: 25px;
         text-align: center;
+        padding: 0 20px; /* Réduit l'espace vide sur les côtés */
+    }
+
+    .footer-logo-img {
+        width: 150px; /* Image plus petite sur téléphone */
+        margin-bottom: 15px;
     }
 
     .footer-brand {
@@ -1649,11 +1692,59 @@ footer {
     }
 
     .footer-contact h3 {
-        font-size: 1.5rem;
+        font-size: 1.3rem; /* Titre affiné */
+    }
+    
+    .contact-subtitle {
+        margin-bottom: 15px;
     }
 
     .form-row {
         flex-direction: column;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .footer-contact input, 
+    .footer-contact textarea {
+        padding: 10px; /* Champs moins épais */
+        box-sizing: border-box;
+    }
+    
+    /* NOUVEAU : Affichage et styles des grilles personnalisables sur mobile */
+    .mobile-only-control {
+        display: block !important;
+    }
+    
+    .product-grid.grid-cols-1 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .product-grid.grid-cols-2 {
+        /* CORRECTION CRITIQUE : minmax(0, 1fr) force la colonne à respecter le cadre de l'écran sans déborder */
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 15px !important;
+    }
+
+    /* NOUVEAU : Optimisation des cartes pour l'affichage côte à côte sur petit écran */
+    .product-grid.grid-cols-2 .product-name {
+        font-size: 0.95rem !important;
+        min-height: 2.6rem !important;
+    }
+
+    .product-grid.grid-cols-2 .product-latin {
+        font-size: 0.7rem !important;
+    }
+
+    .product-grid.grid-cols-2 .btn-buy {
+        padding: 10px 5px !important;
+        font-size: 0.7rem !important;
+        letter-spacing: 0.5px !important;
+        white-space: normal !important; /* Permet au texte du bouton ("AJOUTER AU PANIER") de passer sur 2 lignes sans casser la mise en page */
+    }
+    
+    .btn-footer {
+        padding: 12px 30px;
+        margin-top: 5px;
     }
 }
-
