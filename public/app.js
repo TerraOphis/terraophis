@@ -94,25 +94,39 @@ async function loadCatalogue() {
             productsToDisplay.forEach((product) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
                 
+                // NOUVEAU : Calcul du lot minimum pour savoir si l'article est VRAIMENT achetable
+                let minLotSize = 1;
+                
                 let basePrice = 0;
                 let lotText = '';
                 
                 if (product.prices && Object.keys(product.prices).length > 0) {
                     const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
                     const maxLot = lots[0];
+                    minLotSize = lots[lots.length - 1]; // Le plus petit lot de la liste
                     basePrice = product.prices[maxLot];
                     lotText = maxLot > 1 ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les ${maxLot})</span>` : '';
                 } else {
+                    // CORRECTION : On remet l'ordre décroissant pour l'affichage du plus gros lot !
                     if (product.price10) { basePrice = product.price10; lotText = ' (les 10)'; }
                     else if (product.price5) { basePrice = product.price5; lotText = ' (les 5)'; }
                     else if (product.price3) { basePrice = product.price3; lotText = ' (les 3)'; }
                     else { basePrice = product.price || 0; }
+                    
+                    // CORRECTION : On calcule le lot minimum indépendamment pour bloquer les achats hors-stock
+                    if (product.price) minLotSize = 1;
+                    else if (product.price3) minLotSize = 3;
+                    else if (product.price5) minLotSize = 5;
+                    else if (product.price10) minLotSize = 10;
                 }
                 
+                const isActuallyOutOfStock = product.stock < minLotSize;
                 const hasLots = (product.prices && Object.keys(product.prices).length > 1) || product.price5 || product.price10 || product.price3;
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
-                const isLowStock = product.stock > 0 && product.stock <= 10;
+                
+                // Le badge "Bientôt épuisé" ne s'affiche que si on a moins de 10 MAIS assez pour acheter au moins un lot
+                const isLowStock = !isActuallyOutOfStock && product.stock <= 10;
                 const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
 
                 const card = document.createElement('div');
@@ -127,8 +141,8 @@ async function loadCatalogue() {
                             <p class="product-price">${basePrice} €${lotText}</p>
                         </div>
                     </a>
-                    <button class="btn-buy" onclick="${btnAction}" ${product.stock <= 0 ? 'disabled' : ''} style="${product.stock <= 0 ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
-                        ${product.stock > 0 ? btnText : 'ÉPUISÉ'}
+                    <button class="btn-buy" onclick="${btnAction}" ${isActuallyOutOfStock ? 'disabled' : ''} style="${isActuallyOutOfStock ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
+                        ${isActuallyOutOfStock ? 'ÉPUISÉ' : btnText}
                     </button>
                 `;
                 productGrid.appendChild(card);
@@ -155,8 +169,17 @@ async function loadCatalogue() {
             
             // NOUVEAU : On repousse systématiquement les articles épuisés à la fin, avant d'appliquer le tri utilisateur
             filtered.sort((a, b) => {
-                const aEpuise = a.stock <= 0;
-                const bEpuise = b.stock <= 0;
+                const getMinLot = (p) => {
+                    if (p.prices && Object.keys(p.prices).length > 0) return Math.min(...Object.keys(p.prices).map(Number));
+                    if (p.price) return 1;
+                    if (p.price3) return 3;
+                    if (p.price5) return 5;
+                    if (p.price10) return 10;
+                    return 1;
+                };
+
+                const aEpuise = a.stock < getMinLot(a);
+                const bEpuise = b.stock < getMinLot(b);
 
                 // Si a est épuisé et pas b, a descend à la fin
                 if (aEpuise && !bEpuise) return 1;  
@@ -220,35 +243,56 @@ async function loadProductDetails() {
                 thumbnailsHtml += `<img src="${photo}" alt="Miniature" onclick="document.getElementById('mainProductImg').src='${photo}'">`;
             });
 
-            // NOUVEAU : Construction dynamique du sélecteur de lots
+            // NOUVEAU : Construction dynamique du sélecteur de lots avec vérification des stocks
             let lotSelectorHtml = '';
             let defaultPrice = 0;
+            let canBuySomething = false; // Variable pour vérifier s'il reste au moins UNE option achetable
             
             if (product.prices && Object.keys(product.prices).length > 0) {
                 const sortedLots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
-                defaultPrice = product.prices[sortedLots[0]];
+                
+                // On cherche le plus gros lot qu'il est possible d'acheter pour le mettre par défaut
+                const defaultLot = sortedLots.find(lot => lot <= product.stock) || sortedLots[sortedLots.length - 1];
+                defaultPrice = product.prices[defaultLot];
 
                 lotSelectorHtml = `
                     <div class="lot-selector">
                         <label style="display:block; font-size:0.85rem; margin-bottom:5px;">Quantité</label>
                         <select id="lotSelect" onchange="updateDisplayPrice()">
-                            ${Object.entries(product.prices).map(([lot, price]) => `
-                                <option value="${lot}" ${Number(lot) === sortedLots[0] ? 'selected' : ''}>Lot de ${lot} - ${price} €</option>
-                            `).join('')}
+                            ${sortedLots.map(lot => {
+                                const isDisabled = lot > product.stock ? 'disabled' : '';
+                                const isSelected = lot === defaultLot && !isDisabled ? 'selected' : '';
+                                if (!isDisabled) canBuySomething = true;
+                                
+                                return `<option value="${lot}" ${isSelected} ${isDisabled}>Lot de ${lot} - ${product.prices[lot]} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
+                            }).join('')}
                         </select>
                     </div>
                 `;
             } else {
                 // Rétrocompatibilité anciens articles
-                defaultPrice = product.price10 || product.price5 || product.price3 || product.price || 0;
+                let options = [];
+                if (product.price) options.push({ lot: 1, price: product.price, label: "À l'unité" });
+                if (product.price3) options.push({ lot: 3, price: product.price3, label: "Lot de 3" });
+                if (product.price5) options.push({ lot: 5, price: product.price5, label: "Lot de 5" });
+                if (product.price10) options.push({ lot: 10, price: product.price10, label: "Lot de 10" });
+                
+                // On trie du plus grand au plus petit pour la logique de sélection par défaut
+                options.sort((a, b) => b.lot - a.lot);
+                const defaultOpt = options.find(opt => opt.lot <= product.stock) || options[options.length - 1];
+                if (defaultOpt) defaultPrice = defaultOpt.price;
+
                 lotSelectorHtml = `
                     <div class="lot-selector">
                         <label style="display:block; font-size:0.85rem; margin-bottom:5px;">Quantité</label>
                         <select id="lotSelect" onchange="updateDisplayPrice()">
-                            ${product.price ? `<option value="1">À l'unité - ${product.price} €</option>` : ''}
-                            ${product.price3 ? `<option value="3" ${defaultPrice === product.price3 ? 'selected' : ''}>Lot de 3 - ${product.price3} €</option>` : ''}
-                            ${product.price5 ? `<option value="5" ${defaultPrice === product.price5 ? 'selected' : ''}>Lot de 5 - ${product.price5} €</option>` : ''}
-                            ${product.price10 ? `<option value="10" ${defaultPrice === product.price10 ? 'selected' : ''}>Lot de 10 - ${product.price10} €</option>` : ''}
+                            ${options.map(opt => {
+                                const isDisabled = opt.lot > product.stock ? 'disabled' : '';
+                                const isSelected = opt.lot === defaultOpt?.lot && !isDisabled ? 'selected' : '';
+                                if (!isDisabled) canBuySomething = true;
+                                
+                                return `<option value="${opt.lot}" ${isSelected} ${isDisabled}>${opt.label} - ${opt.price} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
+                            }).join('')}
                         </select>
                     </div>
                 `;
@@ -275,8 +319,8 @@ async function loadProductDetails() {
                         
                         ${lotSelectorHtml}
 
-                        <button class="btn-buy" onclick="addSelectedToCart('${docSnap.id}')" style="width: 100%; padding: 18px; font-size: 1.1rem; margin-bottom: 10px;" ${product.stock <= 0 ? 'disabled' : ''}>
-                            ${product.stock > 0 ? 'Ajouter au panier' : 'RUPTURE DE STOCK'}
+                        <button class="btn-buy" onclick="addSelectedToCart('${docSnap.id}')" style="width: 100%; padding: 18px; font-size: 1.1rem; margin-bottom: 10px;" ${!canBuySomething ? 'disabled' : ''}>
+                            ${canBuySomething ? 'Ajouter au panier' : 'RUPTURE DE STOCK'}
                         </button>
                         <p style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 0;">Stock dispo : ${product.stock}</p>
                         
@@ -373,6 +417,7 @@ window.renderCart = async () => {
     
     let total = 0;
     let html = '';
+    let cartModified = false; // NOUVEAU : On track les modifications silencieuses du panier
 
     for (let i = 0; i < cart.length; i++) {
         try {
@@ -390,17 +435,16 @@ window.renderCart = async () => {
 
                 const multiplier = itemLot || 1;
                 
-                // Si la quantité demandée dépasse le stock réel, on l'ajuste
                 if ((cart[i].quantity * multiplier) > p.stock) {
                     cart[i].quantity = Math.floor(p.stock / multiplier);
+                    cartModified = true;
                 }
                 
-                // NOUVEAU : Si après ajustement la quantité est de 0 (ou moins), on supprime l'article !
                 if (cart[i].quantity <= 0) {
                     cart.splice(i, 1);
-                    localStorage.setItem('terraophis_cart', JSON.stringify(cart));
-                    i--; // On recule d'un cran car on vient de raccourcir le tableau
-                    continue; // On passe au produit suivant
+                    cartModified = true;
+                    i--; 
+                    continue; 
                 }
                 
                 const itemTotal = itemPrice * cart[i].quantity;
@@ -423,11 +467,29 @@ window.renderCart = async () => {
                         </div>
                     </div>
                 `;
+            } else {
+                // NOUVEAU : Si le produit a été supprimé de la base de données, on le retire du panier local !
+                cart.splice(i, 1);
+                cartModified = true;
+                i--;
             }
         } catch (e) { console.error("Erreur panier :", e); }
     }
 
-    container.innerHTML = html || '<p style="text-align: center; color: #888;">Panier obsolète.</p>';
+    // NOUVEAU : Sauvegarde globale des modifications et mise à jour de la bulle
+    if (cartModified) {
+        localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+        if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+    }
+
+    // NOUVEAU : Si après nettoyage des articles obsolètes le panier est vide, on relance le rendu pour afficher "panier vide" proprement
+    if (cart.length === 0) {
+        renderCart();
+        return;
+    }
+
+    // NOUVEAU : On remplace le message "Panier obsolète" par une simple injection du HTML
+    container.innerHTML = html;
     totalEl.textContent = total.toFixed(2) + ' €';
     localStorage.setItem('terraophis_cart_total', total);
 };
@@ -784,7 +846,7 @@ async function loadInstaGallery() {
 }
 
 
-// NOUVEAU : Charge la grille de tous les guides pour la page conseils.html
+// NOUVEAU : Charge la grille de tous les guides pour la page conseils.html avec vérification de l'activation
 async function loadGuidesList() {
     const grid = document.getElementById('guidesGrid');
     if (!grid) return;
@@ -792,6 +854,13 @@ async function loadGuidesList() {
     grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1;">Chargement des guides... 🌿</p>';
     
     try {
+        // Vérification de l'activation globale de la page
+        const configSnap = await getDoc(doc(db, "settings", "guidesConfig"));
+        if (configSnap.exists() && configSnap.data().isActive === false) {
+            grid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; font-size: 1.3rem; color: #888; margin-top: 40px; font-family: \'Playfair Display\', serif;">Les articles de conseil arriveront bientôt 🌿</p>';
+            return;
+        }
+
         const q = query(collection(db, "guides"), orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
         
@@ -804,7 +873,6 @@ async function loadGuidesList() {
         snap.forEach(docSnap => {
             const g = docSnap.data();
             
-            // Astuce pour créer un extrait texte propre sans les balises HTML de l'éditeur
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = g.content;
             let excerpt = tempDiv.textContent || tempDiv.innerText || "";

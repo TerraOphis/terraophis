@@ -28,6 +28,7 @@ onAuthStateChanged(auth, (user) => {
             loadGuides();
             loadAdminWeather();
             loadAboutPageAdmin()
+            loadGlobalGuideToggle();
         } else {
             console.warn("Accès refusé pour :", user.email);
             // NOUVEAU : replace() au lieu de href pour bloquer le bouton Retour + redirection propre
@@ -1486,4 +1487,80 @@ window.deleteTeamMember = async (index) => {
         await updateDoc(docRef, { members: members });
         loadAboutPageAdmin();
     } catch (e) { console.error(e); }
+};
+
+// NOUVEAU : Gestion de l'activation de la page Conseils
+async function loadGlobalGuideToggle() {
+    const toggle = document.getElementById('globalGuideToggle');
+    const statusText = document.getElementById('globalGuideStatus');
+    if (!toggle) return;
+
+    try {
+        const docSnap = await getDoc(doc(db, "settings", "guidesConfig"));
+        if (docSnap.exists()) {
+            toggle.checked = docSnap.data().isActive;
+        } else {
+            toggle.checked = true; // Actif par défaut si jamais configuré
+        }
+
+        toggle.addEventListener('change', async (e) => {
+            statusText.textContent = "Sauvegarde... ⏳";
+            await setDoc(doc(db, "settings", "guidesConfig"), { isActive: e.target.checked }, { merge: true });
+            statusText.textContent = "✅ Paramètre mis à jour !";
+            setTimeout(() => statusText.textContent = '', 2000);
+        });
+    } catch (error) {
+        console.error("Erreur toggle guides:", error);
+    }
+}
+
+// NOUVEAU : Fonctions de déplacement et de suppression des images du Hero Slider
+window.moveSlider = async (index, direction) => {
+    try {
+        const docRef = doc(db, "settings", "heroSlider");
+        const docSnap = await getDoc(docRef);
+        const photos = docSnap.data().photos || [];
+        const newIndex = index + direction;
+        
+        if (newIndex >= 0 && newIndex < photos.length) {
+            // On intervertit les deux slides
+            [photos[index], photos[newIndex]] = [photos[newIndex], photos[index]];
+            await updateDoc(docRef, { photos });
+            loadSliderPreview();
+        }
+    } catch (error) {
+        console.error("Erreur lors du déplacement de la slide :", error);
+    }
+};
+
+window.deleteSliderImg = async (index) => {
+    if (!confirm("Voulez-vous vraiment supprimer cette image du slider ?")) return;
+    try {
+        const docRef = doc(db, "settings", "heroSlider");
+        const docSnap = await getDoc(docRef);
+        const photos = docSnap.data().photos || [];
+        
+        // Suppression physique sur R2 si nécessaire
+        const photoObj = photos[index];
+        const url = typeof photoObj === 'object' ? photoObj.url : photoObj;
+        
+        if (url) {
+            const key = new URL(url).pathname.substring(1);
+            const token = await auth.currentUser.getIdToken();
+            await fetch('/api/delete', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ keys: [key] })
+            });
+        }
+
+        photos.splice(index, 1);
+        await updateDoc(docRef, { photos });
+        loadSliderPreview();
+    } catch (error) {
+        console.error("Erreur suppression de la slide :", error);
+    }
 };

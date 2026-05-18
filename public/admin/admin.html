@@ -216,6 +216,17 @@
 
         <div id="tab-guides" class="tab-content" style="display:none;">
             <section class="admin-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <h2 style="margin: 0;">Affichage des guides sur le site</h2>
+                    <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent-brown); background: #f0eee7; padding: 10px 20px; border-radius: 8px;">
+                        <input type="checkbox" id="globalGuideToggle" style="width: 20px; height: 20px; margin-right: 10px; cursor: pointer;">
+                        Activer la section Conseils
+                    </label>
+                </div>
+                <p id="globalGuideStatus" style="font-size: 0.85rem; color: #6d8c6d; font-weight: bold; margin-top: 10px;"></p>
+            </section>
+
+            <section class="admin-section">
                 <h2>Rédiger une fiche conseil</h2>
                 <form id="guideForm" class="product-form">
                     <input type="text" name="guideTitle" placeholder="Titre de la fiche" required>
@@ -262,6 +273,20 @@
         </div>
         
         <div id="sliderModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeSliderModal()">&times;</span>
+                <h2>Modifier la slide</h2>
+                <form id="sliderModalForm" class="product-form">
+                    <input type="hidden" id="modalSlideIndex">
+                    <div class="form-group" style="flex-direction: column;">
+                        <label for="modalSlideText" style="font-weight: 600; font-size: 0.85rem;">Bandeau texte (Optionnel)</label>
+                        <input type="text" id="modalSlideText" placeholder="Ex: Nouvel arrivage d'isopodes !">
+                        
+                        <label for="modalSlideLink" style="font-weight: 600; font-size: 0.85rem; margin-top: 10px;">Lien au clic (Optionnel)</label>
+                        <input type="text" id="modalSlideLink" placeholder="Ex: /boutique.html?cat=isopodes">
+                    </div>
+                    <button type="submit" class="btn-buy" style="margin-top: 15px;">SAUVEGARDER LA SLIDE</button>
+                </form>
             </div>
         </div>
 

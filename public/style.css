@@ -134,18 +134,30 @@ body.beige-theme {
     color: #888;
     margin-bottom: 5px;
     text-transform: capitalize;
+    /* NOUVEAU : Force sur 1 seule ligne avec "..." si trop long */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .product-name {
     margin: 0;
     font-size: 1.1rem;
     font-family: 'Playfair Display', serif;
+    /* NOUVEAU : Force la zone à faire toujours 2 lignes de haut (alignement parfait) */
+    min-height: 2.8rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .product-price {
     font-weight: 600;
     color: var(--accent-brown);
     margin: 10px 0;
+    /* NOUVEAU : Pousse toujours le prix vers le bas de la zone */
+    margin-top: auto;
 }
 
 /* Login Page */
@@ -352,11 +364,11 @@ body.beige-theme {
 /* 1. L'overlay de texte : plus imposant, fond plein et texte blanc */
 .feature-overlay {
     position: absolute;
-    top: 40%;
+    top: 45%;
     left: 50%;
     transform: translate(-50%, -50%);
     background: #4d5d30; /* Le VERT du logo (fond plein) */
-    padding: 30px 45px;  /* Plus de rembourrage pour le rendre plus gros */
+    padding: 10px 20px;  /* Plus de rembourrage pour le rendre plus gros */
     border-radius: 12px;
     border: none;
     z-index: 5;
@@ -368,7 +380,7 @@ body.beige-theme {
 .feature-overlay h2 {
     font-family: 'Playfair Display', serif;
     margin: 0;
-    font-size: 2.2rem;   /* Titre beaucoup plus gros */
+    font-size: 2rem;   /* Titre beaucoup plus gros */
     color: #ffffff;      /* Texte en blanc */
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -449,9 +461,10 @@ body.beige-theme {
 }
 
 /* Style de la carte produit */
-.product-card {
-    background: transparent;
-    transition: transform 0.3s ease;
+.product-card > a {
+    display: flex !important;
+    flex-direction: column;
+    flex-grow: 1;
 }
 
 .product-card:hover {
@@ -469,6 +482,10 @@ body.beige-theme {
 
 .product-info {
     text-align: center;
+    /* NOUVEAU : Occupe tout l'espace disponible et pousse le reste vers le bas */
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* --- FOOTER GLOBAL --- */

@@ -251,8 +251,26 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     `
                 };
                 await transporter.sendMail(mailOptions);
-                console.log(`✅ Email de confirmation envoyé à ${customerEmail}`);
-            }
+                    console.log(`✅ Email de confirmation envoyé à ${customerEmail}`);
+                }
+
+                // NOUVEAU : Notification automatique à l'admin
+                const adminMailOptions = {
+                    from: `"Terraophis (Admin)" <terra.ophis@gmail.com>`,
+                    to: "terra.ophis@gmail.com",
+                    subject: `🚨 Nouvelle commande validée ! (#${orderId.slice(0,6).toUpperCase()})`,
+                    html: `
+                        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #fcf8f2; color: #4a4238; border-radius: 8px;">
+                            <h2 style="color: #4d5d30; margin-top: 0;">Nouvelle commande reçue ! 🎉</h2>
+                            <p><strong>Client :</strong> ${customerName} (${customerEmail})</p>
+                            <p><strong>Montant payé :</strong> ${amountPaidThisSession.toFixed(2)} €</p>
+                            <p><strong>ID Commande :</strong> ${orderId}</p>
+                            <a href="https://terraophis.fr/admin.html" style="display:inline-block; padding:12px 24px; background:#4d5d30; color:#fff; text-decoration:none; border-radius:6px; margin-top:15px; font-weight: bold;">Accéder au panel Admin</a>
+                        </div>
+                    `
+                };
+                await transporter.sendMail(adminMailOptions);
+                console.log(`✅ Email de notification envoyé à l'admin pour la commande ${orderId}`);
 
         } catch(e) {
             console.error("Erreur lors du traitement Firestore du Webhook :", e);
