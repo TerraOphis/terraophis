@@ -57,15 +57,16 @@ async function loadCatalogue() {
 
     if (!productGrid) return;
 
-    let categoriesMap = {};
+    // Lecture globale de toutes les catégories pour récupérer le lot d'affichage préféré
+    const categoriesMap = {};
+    const categoriesSnap = await getDocs(collection(db, "categories"));
+    categoriesSnap.forEach(catDoc => {
+        categoriesMap[catDoc.id] = catDoc.data();
+    });
 
-    // NOUVEAU : Remplissage dynamique des options du filtre de catégorie depuis Firestore
     if (categoryFilter) {
-        const categoriesSnap = await getDocs(collection(db, "categories"));
         let optionsHtml = '<option value="all">Toutes les catégories</option>';
         categoriesSnap.forEach(catDoc => {
-            categoriesMap[catDoc.id] = catDoc.data();
-            // NOUVEAU : Utilisation des backticks (`) pour que les variables soient bien injectées
             optionsHtml += `<option value="${catDoc.id}">${catDoc.data().name}</option>`;
         });
         categoryFilter.innerHTML = optionsHtml;
@@ -103,25 +104,32 @@ async function loadCatalogue() {
             let lotText = '';
             
             const catInfo = categoriesMap[product.category];
-            const preferredLot = catInfo ? catInfo.defaultDisplayLot : null;
-            
-            if (product.prices && Object.keys(product.prices).length > 0) {
-                const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
-                const maxLot = lots[0];
-                
-                const displayLot = (preferredLot && product.prices[preferredLot] !== undefined) ? preferredLot : maxLot;
-                
-                minLotSize = lots[lots.length - 1]; // Le plus petit lot de la liste
-                basePrice = product.prices[displayLot];
-                lotText = displayLot > 1 ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les ${displayLot})</span>` : '';
-            } else {
-                // CORRECTION : On remet l'ordre décroissant pour l'affichage du plus gros lot !
-                    if (product.price10) { basePrice = product.price10; lotText = ' (les 10)'; }
-                    else if (product.price5) { basePrice = product.price5; lotText = ' (les 5)'; }
-                    else if (product.price3) { basePrice = product.price3; lotText = ' (les 3)'; }
-                    else { basePrice = product.price || 0; }
+                const preferredLot = catInfo ? catInfo.defaultDisplayLot : null;
+
+                if (product.prices && Object.keys(product.prices).length > 0) {
+                    const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
+                    const maxLot = lots[0];
                     
-                    // CORRECTION : On calcule le lot minimum indépendamment pour bloquer les achats hors-stock
+                    // Sélection du lot préféré s'il existe et est disponible sur ce produit, sinon lot maximum
+                    const displayLot = (preferredLot && product.prices[preferredLot] !== undefined) ? preferredLot : maxLot;
+                    
+                    minLotSize = lots[lots.length - 1];
+                    basePrice = product.prices[displayLot];
+                    
+                    // Formatage textuel sur-mesure de la quantité affichée
+                    lotText = displayLot === 1 
+                        ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(l'unité)</span>` 
+                        : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
+                } else {
+                    // Rétrocompatibilité anciens produits
+                    let displayLot = 1;
+                    if (product.price10) { basePrice = product.price10; displayLot = 10; }
+                    else if (product.price5) { basePrice = product.price5; displayLot = 5; }
+                    else if (product.price3) { basePrice = product.price3; displayLot = 3; }
+                    else { basePrice = product.price || 0; displayLot = 1; }
+                    
+                    lotText = displayLot === 1 ? " (l'unité)" : ` (le lot de ${displayLot})`;
+                    
                     if (product.price) minLotSize = 1;
                     else if (product.price3) minLotSize = 3;
                     else if (product.price5) minLotSize = 5;
@@ -196,7 +204,14 @@ async function loadCatalogue() {
 
                 const getPriceForSort = (p) => {
                     if (p.prices && Object.keys(p.prices).length > 0) {
-                        return p.prices[Object.keys(p.prices)[0]]; 
+                        const cInfo = categoriesMap[p.category];
+                        const pLot = cInfo ? cInfo.defaultDisplayLot : null;
+                        
+                        // Utilise le prix du lot mis en évidence pour le tri
+                        if (pLot && p.prices[pLot] !== undefined) return p.prices[pLot];
+                        
+                        const lots = Object.keys(p.prices).map(Number).sort((a, b) => b - a);
+                        return p.prices[lots[0]]; 
                     }
                     return p.price || p.price5 || p.price10 || p.price3 || 0;
                 };
