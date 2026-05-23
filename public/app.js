@@ -57,12 +57,14 @@ async function loadCatalogue() {
 
     if (!productGrid) return;
 
+    let categoriesMap = {};
+
     // NOUVEAU : Remplissage dynamique des options du filtre de catégorie depuis Firestore
-    // Ligne précédente
     if (categoryFilter) {
         const categoriesSnap = await getDocs(collection(db, "categories"));
         let optionsHtml = '<option value="all">Toutes les catégories</option>';
         categoriesSnap.forEach(catDoc => {
+            categoriesMap[catDoc.id] = catDoc.data();
             // NOUVEAU : Utilisation des backticks (`) pour que les variables soient bien injectées
             optionsHtml += `<option value="${catDoc.id}">${catDoc.data().name}</option>`;
         });
@@ -95,19 +97,25 @@ async function loadCatalogue() {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
                 
                 // NOUVEAU : Calcul du lot minimum pour savoir si l'article est VRAIMENT achetable
-                let minLotSize = 1;
+            let minLotSize = 1;
+            
+            let basePrice = 0;
+            let lotText = '';
+            
+            const catInfo = categoriesMap[product.category];
+            const preferredLot = catInfo ? catInfo.defaultDisplayLot : null;
+            
+            if (product.prices && Object.keys(product.prices).length > 0) {
+                const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
+                const maxLot = lots[0];
                 
-                let basePrice = 0;
-                let lotText = '';
+                const displayLot = (preferredLot && product.prices[preferredLot] !== undefined) ? preferredLot : maxLot;
                 
-                if (product.prices && Object.keys(product.prices).length > 0) {
-                    const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
-                    const maxLot = lots[0];
-                    minLotSize = lots[lots.length - 1]; // Le plus petit lot de la liste
-                    basePrice = product.prices[maxLot];
-                    lotText = maxLot > 1 ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les ${maxLot})</span>` : '';
-                } else {
-                    // CORRECTION : On remet l'ordre décroissant pour l'affichage du plus gros lot !
+                minLotSize = lots[lots.length - 1]; // Le plus petit lot de la liste
+                basePrice = product.prices[displayLot];
+                lotText = displayLot > 1 ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(les ${displayLot})</span>` : '';
+            } else {
+                // CORRECTION : On remet l'ordre décroissant pour l'affichage du plus gros lot !
                     if (product.price10) { basePrice = product.price10; lotText = ' (les 10)'; }
                     else if (product.price5) { basePrice = product.price5; lotText = ' (les 5)'; }
                     else if (product.price3) { basePrice = product.price3; lotText = ' (les 3)'; }

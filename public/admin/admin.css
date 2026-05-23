@@ -244,7 +244,7 @@ input:focus, select:focus, textarea:focus {
     border: 2px solid white;
 }
 
-.edit-photo-item button {
+.edit-photo-item .btn-delete-photo {
     position: absolute;
     top: -8px;
     right: -8px;

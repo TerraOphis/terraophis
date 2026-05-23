@@ -203,6 +203,7 @@
                             <option value="materiels">Matériels & Accessoires</option>
                         </select>
                         <input type="text" id="newCatLots" placeholder="Lots désirés séparés par des virgules (ex: 1,5,10 ou 1,3)" required>
+                        <input type="number" id="newCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required title="Le lot qui sera affiché en évidence sur la boutique">
                     </div>
                     <button type="submit" class="btn-buy">AJOUTER LA CATÉGORIE</button>
                 </form>
@@ -316,10 +317,10 @@
                     <div id="editDynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
                     
                     <div class="form-group">
-                        <input type="number" name="stock" id="editStock" placeholder="Quantité en stock" required>
+                        <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">
                     </div>
                     <textarea name="description" id="editDescription" placeholder="Description de l'espèce..." rows="4" required></textarea>
-                    
+
                     <div class="editor-container">
                         <div class="editor-toolbar">
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
@@ -400,8 +401,9 @@
                             <option value="materiels">Matériels & Accessoires</option>
                         </select>
                         <input type="text" id="editCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
+                        <input type="number" id="editCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required>
                     </div>
-                    <button type="submit" class="btn-buy">METTRE À JOUR LA CATÉGORIE</button>
+                    <button type="submit" class="btn-buy">METTRE À JOUR LA CATÉGORIE</button> 
                 </form>
             </div>
         </div>

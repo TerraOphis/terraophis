@@ -161,7 +161,6 @@ function renderEditPhotos(photos, productId) {
     }
 
     photos.forEach((url, index) => {
-        // On détermine la position de la photo
         const isFirst = index === 0;
         const isLast = index === photos.length - 1;
         
@@ -169,10 +168,11 @@ function renderEditPhotos(photos, productId) {
         div.className = 'edit-photo-item';
         div.style.cssText = 'height: auto; display: flex; flex-direction: column; gap: 8px;';
         
+        // Correction : Ajout de la classe "btn-delete-photo" pour isoler son CSS des flèches de navigation
         div.innerHTML = `
             <div style="position: relative; width: 100px; height: 100px;">
                 <img src="${url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 2px solid white;">
-                <button type="button" onclick="deleteProductPhoto('${productId}', ${index}, '${url}')" title="Supprimer cette photo" style="position: absolute; top: -8px; right: -8px; background: #a35d5d; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">×</button>
+                <button type="button" class="btn-delete-photo" onclick="deleteProductPhoto('${productId}', ${index}, '${url}')" title="Supprimer cette photo">×</button>
             </div>
             <div style="display: flex; justify-content: space-between; width: 100px;">
                 <button type="button" onclick="moveProductPhoto('${productId}', ${index}, -1)" style="padding: 2px 8px; border: none; background: #e0ddd5; border-radius: 4px; color: var(--accent-brown); cursor: pointer; font-weight: bold; visibility: ${isFirst ? 'hidden' : 'visible'};" title="Déplacer à gauche">←</button>
@@ -284,25 +284,25 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
         
         const finalPhotos = [...currentPhotos, ...newUrls];
 
-        // Nouveau : Capture du code HTML enrichi pour l'envoyer vers Firestore
         const careGuideHtml = document.getElementById('editCareGuideEditor').innerHTML;
 
         const prices = {};
-                document.querySelectorAll('#editDynamicPricesContainer .lot-price-input').forEach(input => {
-                    prices[input.dataset.lot] = parseFloat(input.value) || 0;
-                });
+        document.querySelectorAll('#editDynamicPricesContainer .lot-price-input').forEach(input => {
+            prices[input.dataset.lot] = parseFloat(input.value) || 0;
+        });
 
-                await updateDoc(docRef, {
-                    name: formData.get('name'),
-                    latinName: formData.get('latinName'),
-                    stock: parseInt(formData.get('stock')),
-                    category: formData.get('category'),
-                    difficulty: formData.get('difficulty'),
-                    description: formData.get('description'),
-                    careGuide: careGuideHtml,
-                    prices: prices, 
-                    photos: finalPhotos
-                });
+        // Correction : Gestion du champ stock vide, converti automatiquement en 0 pour Firestore
+        await updateDoc(docRef, {
+            name: formData.get('name'),
+            latinName: formData.get('latinName'),
+            stock: formData.get('stock') ? parseInt(formData.get('stock')) : 0,
+            category: formData.get('category'),
+            difficulty: formData.get('difficulty'),
+            description: formData.get('description'),
+            careGuide: careGuideHtml,
+            prices: prices, 
+            photos: finalPhotos
+        });
 
         statusText.textContent = "✅ Produit mis à jour !";
         loadInventory();
@@ -1157,10 +1157,11 @@ window.loadAdminCategories = async () => {
         
         // NOUVEAU : Ajout du bouton "Modifier" à côté du bouton "Supprimer"
         listHtml += `
-            <div class="inventory-item" style="grid-template-columns: 2fr 1fr 1fr auto; align-items: center;">
+            <div class="inventory-item" style="grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: center;">
                 <div><strong>${cat.name}</strong> <span style="font-size:0.8rem; color:#888;">(${catDoc.id})</span></div>
                 <div>Type: ${cat.type}</div>
                 <div>Lots configurés: [${cat.lots.join(', ')}]</div>
+                <div>Affichage: x${cat.defaultDisplayLot || 'Max'}</div>
                 <div style="display: flex; gap: 10px;">
                     <button onclick="openEditCategory('${catDoc.id}')" class="btn-buy" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 4px;">Modifier</button>
                     <button onclick="deleteCategory('${catDoc.id}')" class="btn-logout" style="border:none; padding: 6px 12px;">Supprimer</button>
@@ -1201,12 +1202,13 @@ document.getElementById('categoryForm')?.addEventListener('submit', async (e) =>
     const name = document.getElementById('newCatName').value.trim();
     const type = document.getElementById('newCatType').value;
     const lotsRaw = document.getElementById('newCatLots').value;
+    const defaultDisplayLot = parseInt(document.getElementById('newCatDefaultLot').value) || 1;
     
     const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
 
     if (!id || !name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
 
-    await setDoc(doc(db, "categories", id), { name, type, lots });
+    await setDoc(doc(db, "categories", id), { name, type, lots, defaultDisplayLot });
     document.getElementById('categoryForm').reset();
     loadAdminCategories();
     alert("Catégorie créée et liée avec succès ! 🎉");
@@ -1229,6 +1231,7 @@ window.openEditCategory = async (id) => {
         document.getElementById('editCatName').value = cat.name;
         document.getElementById('editCatType').value = cat.type;
         document.getElementById('editCatLots').value = cat.lots.join(', ');
+        document.getElementById('editCatDefaultLot').value = cat.defaultDisplayLot || 1;
         document.getElementById('editCategoryModal').style.display = 'flex';
     }
 };
@@ -1243,12 +1246,13 @@ document.getElementById('editCategoryForm')?.addEventListener('submit', async (e
     const name = document.getElementById('editCatName').value.trim();
     const type = document.getElementById('editCatType').value;
     const lotsRaw = document.getElementById('editCatLots').value;
+    const defaultDisplayLot = parseInt(document.getElementById('editCatDefaultLot').value) || 1;
     
     const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
 
     if (!name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
 
-    await updateDoc(doc(db, "categories", id), { name, type, lots });
+    await updateDoc(doc(db, "categories", id), { name, type, lots, defaultDisplayLot });
     closeEditCategoryModal();
     loadAdminCategories();
     alert("Catégorie mise à jour avec succès ! ✏️");
