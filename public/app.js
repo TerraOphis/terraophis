@@ -219,6 +219,7 @@ async function loadCatalogue() {
                     if (pLot === 10 && p.price10) return p.price10;
                     if (pLot === 5 && p.price5) return p.price5;
                     if (pLot === 3 && p.price3) return p.price3;
+                
                     if (pLot === 1 && p.price) return p.price;
 
                     return p.price10 || p.price5 || p.price3 || p.price || 0;
