@@ -152,64 +152,69 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
         try {
             const orderRef = admin.firestore().collection('orders').doc(orderId);
-            const orderSnap = await orderRef.get();
-            let weatherWarning = 'OK';
             
-            if (orderSnap.exists) {
-                const orderData = orderSnap.data();
-                weatherWarning = orderData.weatherWarning || 'OK';
-
-                // NOUVEAU : Sécurité anti-doublon (Idempotence). On ignore les requêtes répétées de Stripe.
-                if (orderData.status === 'En attente de paiement') {
-                    if (orderData.items && orderData.items.length > 0) {
-                        const batch = admin.firestore().batch();
-                        for (const item of orderData.items) {
-                            const productRef = admin.firestore().collection('products').doc(item.id);
-                            
-                            // Prise en compte de la taille du lot pour la déduction réelle
-                            const multiplier = item.lotSize || 1;
-                            const totalDeduction = item.quantity * multiplier;
-                            
-                            batch.update(productRef, {
-                                stock: admin.firestore.FieldValue.increment(-totalDeduction)
-                            });
-                        }
-                        await batch.commit();
-                        console.log(`📦 Stocks déduits avec succès pour la commande ${orderId}`);
-                    }
-                } else {
-                    console.log(`⚠️ Webhook en double ignoré par sécurité pour la commande ${orderId}`);
-                }
-// Ligne suivante
-            }
-
             const shipping = session.shipping_details;
             const customer = session.customer_details;
             const customerEmail = customer?.email || 'Non renseigné';
             const customerName = shipping?.name || customer?.name || 'Client';
+            
+            let weatherWarning = 'OK';
 
-            // NOUVEAU : On prépare la mise à jour sans toucher à l'adresse par défaut
-            const updatePayload = {
-                status: 'Payé',
-                amountPaid: amountPaidThisSession,
-                paymentDate: admin.firestore.FieldValue.serverTimestamp(),
-                customerEmail: customerEmail,
-                customerName: customerName
-            };
+            // NOUVEAU : Utilisation d'une "Transaction" Firestore.
+            // Cela verrouille la commande en base de données. Si Stripe envoie le Webhook 2 fois en même temps,
+            // la 2ème requête attendra que la 1ère ait fini, verra que le statut est passé à "Payé", et s'annulera !
+            await admin.firestore().runTransaction(async (transaction) => {
+                const orderSnap = await transaction.get(orderRef);
+                
+                if (!orderSnap.exists) {
+                    throw new Error("Commande introuvable");
+                }
+                
+                const orderData = orderSnap.data();
+                weatherWarning = orderData.weatherWarning || 'OK';
 
-            // NOUVEAU : On met à jour l'adresse UNIQUEMENT si Stripe nous en renvoie une valide
-            if (shipping && shipping.address) {
-                updatePayload.shippingAddress = {
-                    line1: shipping.address.line1,
-                    line2: shipping.address.line2 || '',
-                    city: shipping.address.city,
-                    postalCode: shipping.address.postal_code,
-                    country: shipping.address.country
+                // On vérifie le statut DANS la transaction verrouillée
+                if (orderData.status !== 'En attente de paiement') {
+                    throw new Error("ALREADY_PROCESSED");
+                }
+
+                // 1. Déduction des stocks
+                if (orderData.items && orderData.items.length > 0) {
+                    for (const item of orderData.items) {
+                        const productRef = admin.firestore().collection('products').doc(item.id);
+                        
+                        const multiplier = item.lotSize || 1;
+                        const totalDeduction = item.quantity * multiplier;
+                        
+                        transaction.update(productRef, {
+                            stock: admin.firestore.FieldValue.increment(-totalDeduction)
+                        });
+                    }
+                }
+
+                // 2. Préparation et mise à jour immédiate du statut de la commande
+                const updatePayload = {
+                    status: 'Payé',
+                    amountPaid: amountPaidThisSession,
+                    paymentDate: admin.firestore.FieldValue.serverTimestamp(),
+                    customerEmail: customerEmail,
+                    customerName: customerName
                 };
-            }
 
-            // On envoie la mise à jour sécurisée
-            await orderRef.update(updatePayload);
+                if (shipping && shipping.address) {
+                    updatePayload.shippingAddress = {
+                        line1: shipping.address.line1,
+                        line2: shipping.address.line2 || '',
+                        city: shipping.address.city,
+                        postalCode: shipping.address.postal_code,
+                        country: shipping.address.country
+                    };
+                }
+
+                transaction.update(orderRef, updatePayload);
+            });
+
+            console.log(`📦 Transaction réussie, stocks déduits sans doublon pour la commande ${orderId}`);
 
             if (customerEmail !== 'Non renseigné') {
                 // Configuration dynamique du message selon la météo lors de la commande
@@ -292,7 +297,12 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 console.log(`✅ Email de notification envoyé à l'admin pour la commande ${orderId}`);
 
         } catch(e) {
-            console.error("Erreur lors du traitement Firestore du Webhook :", e);
+            // NOUVEAU : On gère silencieusement l'erreur si la commande a déjà été traitée par un webhook précédent
+            if (e.message === "ALREADY_PROCESSED") {
+                console.log(`⚠️ Webhook en double ignoré par sécurité pour la commande ${orderId}`);
+            } else {
+                console.error("Erreur lors du traitement Firestore du Webhook :", e);
+            }
         }
     }
     res.json({ received: true });
