@@ -159,17 +159,24 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 const orderData = orderSnap.data();
                 weatherWarning = orderData.weatherWarning || 'OK';
 
+                // Ligne précédente
                 if (orderData.items && orderData.items.length > 0) {
                     const batch = admin.firestore().batch();
                     for (const item of orderData.items) {
                         const productRef = admin.firestore().collection('products').doc(item.id);
+                        
+                        // NOUVEAU : Prise en compte de la taille du lot pour la déduction réelle
+                        const multiplier = item.lotSize || 1;
+                        const totalDeduction = item.quantity * multiplier;
+                        
                         batch.update(productRef, {
-                            stock: admin.firestore.FieldValue.increment(-item.quantity)
+                            stock: admin.firestore.FieldValue.increment(-totalDeduction)
                         });
                     }
                     await batch.commit();
                     console.log(`📦 Stocks déduits avec succès pour la commande ${orderId}`);
                 }
+// Ligne suivante
             }
 
             const shipping = session.shipping_details;
@@ -177,20 +184,28 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             const customerEmail = customer?.email || 'Non renseigné';
             const customerName = shipping?.name || customer?.name || 'Client';
 
-            await orderRef.update({
+            // NOUVEAU : On prépare la mise à jour sans toucher à l'adresse par défaut
+            const updatePayload = {
                 status: 'Payé',
                 amountPaid: amountPaidThisSession,
                 paymentDate: admin.firestore.FieldValue.serverTimestamp(),
                 customerEmail: customerEmail,
-                customerName: customerName,
-                shippingAddress: shipping ? {
+                customerName: customerName
+            };
+
+            // NOUVEAU : On met à jour l'adresse UNIQUEMENT si Stripe nous en renvoie une valide
+            if (shipping && shipping.address) {
+                updatePayload.shippingAddress = {
                     line1: shipping.address.line1,
                     line2: shipping.address.line2 || '',
                     city: shipping.address.city,
                     postalCode: shipping.address.postal_code,
                     country: shipping.address.country
-                } : null
-            });
+                };
+            }
+
+            // On envoie la mise à jour sécurisée
+            await orderRef.update(updatePayload);
 
             if (customerEmail !== 'Non renseigné') {
                 // Configuration dynamique du message selon la météo lors de la commande
@@ -458,7 +473,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
             cancel_url: `${clientUrl}/`,
         };
 
-        // NOUVEAU : On collecte l'adresse Stripe uniquement s'il y a expédition
+        // NOUVEAU : On collecte l'adresse Stripe UNIQUEMENT s'il y a expédition
         if (orderData.shippingMethod !== 'retrait') {
             sessionConfig.shipping_address_collection = {
                 allowed_countries: ['FR', 'BE', 'CH', 'LU'],

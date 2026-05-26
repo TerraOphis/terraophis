@@ -483,8 +483,9 @@
                     userId: user.uid,
                     customerEmail: user.email,
                     customerName: document.getElementById('chkName').value,
+                    customerPhone: document.getElementById('chkPhone').value, // AJOUT : Sauvegarde du téléphone directement sur la commande
                     items: cart,
-                    amountValue: totalWithShipping, 
+                    amountValue: totalWithShipping,
                     shippingCost: currentShipping,
                     shippingMethod: shippingMethod, // NOUVEAU
                     status: 'En attente de paiement',

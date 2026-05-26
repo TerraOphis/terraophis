@@ -623,30 +623,13 @@ window.processCheckout = async () => {
 
     const user = auth.currentUser;
     if (!user) {
-        alert("Veuillez vous connecter pour valider votre panier 🌿");
-        window.location.href = '/connexion.html';
-        return;
-    }
-
-    // NOUVEAU : Déduction automatique et mathématique des stocks pour chaque article du panier
-    try {
-        for (const item of cart) {
-            const multiplier = item.lotSize || 1;
-            const totalDeduction = item.quantity * multiplier;
-            
-            const productRef = doc(db, "products", item.id);
-            await updateDoc(productRef, {
-                stock: increment(-totalDeduction)
-            });
+            alert("Veuillez vous connecter pour valider votre panier 🌿");
+            window.location.href = '/connexion.html';
+            return;
         }
-    } catch (error) {
-        console.error("Erreur lors de la mise à jour des stocks :", error);
-        alert("Une erreur est survenue lors de la vérification des stocks.");
-        return;
-    }
 
-    window.location.href = '/checkout.html';
-};
+        window.location.href = '/checkout.html';
+    };
 
 async function loadHeroSlider() {
     const heroHeader = document.querySelector('.hero-slider');
