@@ -159,22 +159,26 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 const orderData = orderSnap.data();
                 weatherWarning = orderData.weatherWarning || 'OK';
 
-                // Ligne précédente
-                if (orderData.items && orderData.items.length > 0) {
-                    const batch = admin.firestore().batch();
-                    for (const item of orderData.items) {
-                        const productRef = admin.firestore().collection('products').doc(item.id);
-                        
-                        // NOUVEAU : Prise en compte de la taille du lot pour la déduction réelle
-                        const multiplier = item.lotSize || 1;
-                        const totalDeduction = item.quantity * multiplier;
-                        
-                        batch.update(productRef, {
-                            stock: admin.firestore.FieldValue.increment(-totalDeduction)
-                        });
+                // NOUVEAU : Sécurité anti-doublon (Idempotence). On ignore les requêtes répétées de Stripe.
+                if (orderData.status === 'En attente de paiement') {
+                    if (orderData.items && orderData.items.length > 0) {
+                        const batch = admin.firestore().batch();
+                        for (const item of orderData.items) {
+                            const productRef = admin.firestore().collection('products').doc(item.id);
+                            
+                            // Prise en compte de la taille du lot pour la déduction réelle
+                            const multiplier = item.lotSize || 1;
+                            const totalDeduction = item.quantity * multiplier;
+                            
+                            batch.update(productRef, {
+                                stock: admin.firestore.FieldValue.increment(-totalDeduction)
+                            });
+                        }
+                        await batch.commit();
+                        console.log(`📦 Stocks déduits avec succès pour la commande ${orderId}`);
                     }
-                    await batch.commit();
-                    console.log(`📦 Stocks déduits avec succès pour la commande ${orderId}`);
+                } else {
+                    console.log(`⚠️ Webhook en double ignoré par sécurité pour la commande ${orderId}`);
                 }
 // Ligne suivante
             }
