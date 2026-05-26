@@ -16,49 +16,78 @@
         <div class="checkout-wrapper">
             
             <div>
-                <form id="checkoutForm">
-                    <div class="checkout-step">
-                        <h2><span class="checkout-step-number">1</span> Adresse de livraison</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <input type="text" id="chkName" placeholder="Prénom et Nom" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
-                            <input type="text" id="chkLine1" placeholder="Adresse (N°, rue...)" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
-                            <input type="text" id="chkLine2" placeholder="Appartement, bâtiment (Optionnel)" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
-                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
-                                <input type="text" id="chkPostal" placeholder="Code postal" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
-                                <div style="position: relative; width: 100%;">
-                                    <input type="text" id="chkCity" placeholder="Ville" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; width: 100%; box-sizing: border-box;" autocomplete="off">
-                                    <ul id="cityDropdown" style="display: none; position: absolute; width: 100%; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 6px; z-index: 1000; padding: 0; margin: 0; list-style: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></ul>
-                                </div>
-                            </div>
-                            <select id="chkCountry" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white;">
-                                <option value="FR">France</option>
-                                <option value="BE">Belgique</option>
-                                <option value="CH">Suisse</option>
-                                <option value="LU">Luxembourg</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-
-                    <div id="inlineWeatherAlert" style="display: none; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid var(--border-light); text-align: center; transition: all 0.3s ease;">
-                        <h3 id="inlineWeatherTitle" style="margin-top: 0; font-family: 'Playfair Display', serif; margin-bottom: 10px;"></h3>
-                        <p id="inlineWeatherText" style="margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--accent-brown);"></p>
-                    </div>
-
-                    <div class="checkout-step">
-                        <h2><span class="checkout-step-number">2</span> Paiement sécurisé</h2>
-                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 20px;">
-                            Vous allez être redirigé vers l'interface de paiement cryptée et sécurisée de notre partenaire Stripe.
-                        </p>
-                        <label style="display: flex; gap: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin-bottom: 20px; align-items: flex-start;">
-                            <input type="checkbox" required style="margin-top: 3px;">
-                            <span>Je m'engage à fournir des conditions de vie adaptées au bien-être de l'animal et certifie avoir pris connaissance des fiches conseils.</span>
-                        </label>
-                        
-                        <button type="submit" id="btnFinalPay" class="btn-buy" style="width: 100%; font-size: 1.1rem; padding: 18px;">PAYER MA COMMANDE</button>
-                    </div>
-                </form>
+    <form id="checkoutForm">
+        <div class="checkout-step">
+            <h2><span class="checkout-step-number">1</span> Vos coordonnées</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+                <input type="text" id="chkName" placeholder="Prénom et Nom" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="tel" id="chkPhone" placeholder="Numéro de téléphone" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
             </div>
+
+            <h3 style="font-size: 1rem; color: var(--accent-brown); margin-bottom: 15px; border-top: 1px solid #eee; padding-top: 15px;">Adresse de livraison</h3>
+            <div id="addressFieldsContainer" style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="text" id="chkLine1" placeholder="Adresse (N°, rue...)" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                <input type="text" id="chkLine2" placeholder="Appartement, bâtiment (Optionnel)" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+                    <input type="text" id="chkPostal" placeholder="Code postal" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                    <div style="position: relative; width: 100%;">
+                        <input type="text" id="chkCity" placeholder="Ville" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; width: 100%; box-sizing: border-box;" autocomplete="off">
+                        <ul id="cityDropdown" style="display: none; position: absolute; width: 100%; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 6px; z-index: 1000; padding: 0; margin: 0; list-style: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></ul>
+                    </div>
+                </div>
+                <select id="chkCountry" required style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: white;">
+                    <option value="FR">France</option>
+                    <option value="BE">Belgique</option>
+                    <option value="CH">Suisse</option>
+                    <option value="LU">Luxembourg</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="inlineWeatherAlert" style="display: none; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid var(--border-light); text-align: center; transition: all 0.3s ease;">
+            <h3 id="inlineWeatherTitle" style="margin-top: 0; font-family: 'Playfair Display', serif; margin-bottom: 10px;"></h3>
+            <p id="inlineWeatherText" style="margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--accent-brown);"></p>
+        </div>
+
+        <div class="checkout-step">
+            <h2><span class="checkout-step-number">2</span> Mode de livraison</h2>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <label class="shipping-option">
+                    <input type="radio" name="shippingMethod" value="colissimo" checked>
+                    <span><strong>Colissimo (2 jours ouvrés)</strong> - 8.90 € <span id="colissimoFreeText" style="color: #4d5d30; font-weight: bold; display: none;">(OFFERT)</span><br><small>Départ Lun au Mer. Offert dès 100€ d'achat.</small></span>
+                </label>
+                <label class="shipping-option">
+                    <input type="radio" name="shippingMethod" value="chrono18">
+                    <span><strong>Chrono 18 (Express)</strong> - 14.90 €<br><small>Demain avant 18h. Départ Lun au Jeu.</small></span>
+                </label>
+                <label class="shipping-option">
+                    <input type="radio" name="shippingMethod" value="retrait">
+                    <span>
+                        <strong>Retrait sur place (Gratuit)</strong><br>
+                        <small style="display: flex; flex-direction: column; gap: 5px; margin-top: 3px;">
+                            Pink Tropical, Bouillargues. Contact par mail pour RDV.
+                            <a href="https://www.google.com/maps/search/?api=1&query=Pink+Tropical,+KM4+CENTER,+Route+d'Arles,+30230+Bouillargues" target="_blank" style="color: #4d5d30; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; width: fit-content;" onclick="event.stopPropagation();">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                Voir sur la carte
+                            </a>
+                        </small>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="checkout-step">
+            <h2><span class="checkout-step-number">3</span> Paiement sécurisé</h2>
+            <p style="font-size: 0.9rem; color: #666; margin-bottom: 20px;">Redirection vers l'interface sécurisée Stripe.</p>
+            <label style="display: flex; gap: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin-bottom: 20px;">
+                <input type="checkbox" required>
+                <span>Je m'engage à fournir des conditions de vie adaptées au bien-être de l'animal.</span>
+            </label>
+            <button type="submit" id="btnFinalPay" class="btn-buy" style="width: 100%; font-size: 1.1rem; padding: 18px;">PAYER MA COMMANDE</button>
+        </div>
+    </form>
+</div>
 
 
             <div>
@@ -96,21 +125,39 @@
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { doc, getDoc, collection, addDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        const SHIPPING_COST = 9.90;
-        const HEAT_PACK_COST = 3.50; // NOUVEAU : Supplément chaufferette
+        // NOUVEAU : Mise à jour des tarifs
+        const HEAT_PACK_COST = 2.00; 
         let cart = [];
         let subtotal = 0;
-        let isColdWeather = false; // NOUVEAU : Traceur de météo froide
-        let isHotWeather = false;  // NOUVEAU : Traceur de météo chaude
+        let isColdWeather = false; 
+        let isHotWeather = false;  
 
-        // NOUVEAU : Mise à jour dynamique des totaux
+        // NOUVEAU : Calcule le total en fonction du mode de livraison choisi
         const updateTotals = () => {
-            let currentShipping = SHIPPING_COST;
-            let shippingText = "Frais de port (Vivant / Isotherme)";
+            const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked').value;
+            let currentShipping = 0;
+            let shippingText = "Frais de port";
 
-            if (isColdWeather) {
-                currentShipping += HEAT_PACK_COST;
-                shippingText = "Frais de port + Chaufferette (Vivant)";
+            // Gestion Colissimo Offert
+            const freeColissimo = subtotal >= 100;
+            const colissimoText = document.getElementById('colissimoFreeText');
+            if (colissimoText) colissimoText.style.display = freeColissimo ? 'inline' : 'none';
+
+            if (shippingMethod === 'colissimo') {
+                currentShipping = freeColissimo ? 0 : 8.90;
+                shippingText = freeColissimo ? "Colissimo (Offert)" : "Livraison Colissimo";
+            } else if (shippingMethod === 'chrono18') {
+                currentShipping = 14.90;
+                shippingText = "Livraison Express Chrono 18";
+            } else if (shippingMethod === 'retrait') {
+                currentShipping = 0;
+                shippingText = "Retrait Pink Tropical";
+            }
+
+            // Ajout chaufferette uniquement si ce n'est pas un retrait
+            if (isColdWeather && shippingMethod !== 'retrait') {
+                currentShipping += 2.00; // Nouveau prix : 2€
+                shippingText += " + Chaufferette";
             }
 
             const shippingLabel = document.getElementById('chkShippingLabel');
@@ -120,7 +167,53 @@
             document.getElementById('chkTotal').textContent = (subtotal + currentShipping).toFixed(2) + ' €';
         };
 
-     // NOUVEAU : Écouteurs pour déclencher l'API quand le client tape sa ville
+        // 2. ÉCOUTEURS POUR LE CHANGEMENT DE MODE
+        document.querySelectorAll('input[name="shippingMethod"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const isRetrait = e.target.value === 'retrait';
+                const addressContainer = document.getElementById('addressFieldsContainer');
+                const alertBox = document.getElementById('inlineWeatherAlert');
+
+                if (isRetrait) {
+                    // En mode retrait, on peut masquer ou griser l'adresse
+                    addressContainer.style.opacity = '0.5';
+                    addressContainer.querySelectorAll('input, select').forEach(i => i.required = false);
+                    alertBox.style.display = 'none'; // Pas besoin d'alerte transport si retrait
+                } else {
+                    addressContainer.style.opacity = '1';
+                    addressContainer.querySelectorAll('input, select').forEach(i => {
+                        if(i.id !== 'chkLine2') i.required = true;
+                    });
+                    // On relance la météo si une ville est déjà là
+                    if (document.getElementById('chkCity').value) window.checkWeather();
+                }
+                updateTotals();
+            });
+        });
+
+        // NOUVEAU : Écouteur pour masquer/afficher l'adresse selon la livraison
+        document.addEventListener('DOMContentLoaded', () => {
+            const shippingRadios = document.querySelectorAll('input[name="shippingMethod"]');
+            const addressContainer = document.getElementById('addressFieldsContainer');
+            const addressInputs = addressContainer.querySelectorAll('input, select');
+            
+            shippingRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    if (e.target.value === 'retrait') {
+                        addressContainer.style.display = 'none';
+                        addressInputs.forEach(input => input.removeAttribute('required'));
+                        document.getElementById('inlineWeatherAlert').style.display = 'none';
+                    } else {
+                        addressContainer.style.display = 'flex';
+                        addressInputs.forEach(input => {
+                            if (input.id !== 'chkLine2') input.setAttribute('required', 'true');
+                        });
+                        if (document.getElementById('chkCity').value) window.checkWeather();
+                    }
+                    updateTotals();
+                });
+            });
+        });
         document.getElementById('chkCity').addEventListener('blur', window.checkWeather);
         document.getElementById('chkCountry').addEventListener('change', window.checkWeather);
         document.getElementById('chkPostal').addEventListener('blur', window.checkWeather);
@@ -293,9 +386,13 @@
 
             document.getElementById('chkName').value = user.displayName || '';
             const userSnap = await getDoc(doc(db, "users", user.uid));
-            if (userSnap.exists() && userSnap.data().address) {
-                const addr = userSnap.data().address;
-                document.getElementById('chkLine1').value = addr.line1 || '';
+            if (userSnap.exists()) {
+                if (userSnap.data().phone) {
+                    document.getElementById('chkPhone').value = userSnap.data().phone;
+                }
+                if (userSnap.data().address) {
+                    const addr = userSnap.data().address;
+                    document.getElementById('chkLine1').value = addr.line1 || '';
                 document.getElementById('chkLine2').value = addr.line2 || '';
                 document.getElementById('chkPostal').value = addr.postalCode || '';
                 document.getElementById('chkCity').value = addr.city || '';
@@ -303,6 +400,7 @@
                 
                 // NOUVEAU : Si l'adresse est pré-remplie, on vérifie la météo direct
                 if (addr.city) window.checkWeather();
+            }
             }
 
             const container = document.getElementById('checkoutItems');
@@ -356,11 +454,18 @@
 
             const user = auth.currentUser;
             
-            // NOUVEAU : Prise en compte du coût météo dynamique pour l'envoi vers Stripe
-            const currentShipping = isColdWeather ? SHIPPING_COST + HEAT_PACK_COST : SHIPPING_COST;
+            // NOUVEAU : Récupération du mode et recalcul final
+            const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked').value;
+            let currentShipping = 0;
+            
+            if (shippingMethod === 'colissimo') currentShipping = subtotal >= 100 ? 0 : 8.90;
+            if (shippingMethod === 'chrono18') currentShipping = 14.90;
+            if (isColdWeather && shippingMethod !== 'retrait') currentShipping += HEAT_PACK_COST;
+
             const totalWithShipping = subtotal + currentShipping;
 
-            const shippingAddress = {
+            // NOUVEAU : On ignore l'adresse si c'est un retrait
+            const shippingAddress = shippingMethod === 'retrait' ? null : {
                 line1: document.getElementById('chkLine1').value,
                 line2: document.getElementById('chkLine2').value,
                 postalCode: document.getElementById('chkPostal').value,
@@ -369,7 +474,10 @@
             };
 
             try {
-                await setDoc(doc(db, "users", user.uid), { address: shippingAddress }, { merge: true });
+                // NOUVEAU : On sauvegarde toujours le téléphone dans le profil utilisateur
+                const userUpdates = { phone: document.getElementById('chkPhone').value };
+                if (shippingAddress) userUpdates.address = shippingAddress;
+                await setDoc(doc(db, "users", user.uid), userUpdates, { merge: true });
 
                 const orderRef = await addDoc(collection(db, "orders"), {
                     userId: user.uid,
@@ -378,10 +486,11 @@
                     items: cart,
                     amountValue: totalWithShipping, 
                     shippingCost: currentShipping,
+                    shippingMethod: shippingMethod, // NOUVEAU
                     status: 'En attente de paiement',
                     shippingAddress: shippingAddress,
-                    hasHeatPack: isColdWeather, // NOUVEAU : Sauvegarde pour l'admin
-                    weatherWarning: isHotWeather ? 'Canicule' : (isColdWeather ? 'Grand Froid' : 'OK'), // NOUVEAU
+                    hasHeatPack: (isColdWeather && shippingMethod !== 'retrait'),
+                    weatherWarning: (shippingMethod !== 'retrait') ? (isHotWeather ? 'Canicule' : (isColdWeather ? 'Grand Froid' : 'OK')) : 'OK',
                     createdAt: serverTimestamp()
                 });
 

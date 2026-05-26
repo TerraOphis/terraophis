@@ -416,7 +416,6 @@ window.deleteProduct = async (id) => {
     }
 };
 
-// NOUVEAU : Fonction pour récupérer et afficher les commandes
 async function loadOrders() {
     const container = document.getElementById('adminOrders');
     if (!container) return;
@@ -433,37 +432,44 @@ async function loadOrders() {
             return;
         }
 
-        // NOUVEAU : Boucle asynchrone pour traiter et afficher chaque commande de façon détaillée
         for (const orderDoc of snap.docs) {
             const order = orderDoc.data();
             const orderId = orderDoc.id;
             const dateObj = order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('fr-FR', {hour: '2-digit', minute:'2-digit'}) : 'Date inconnue';
 
-            // Récupération des noms des produits du panier
             let itemsHtml = '';
             if (order.items && order.items.length > 0) {
                 for (const item of order.items) {
                     const prodSnap = await getDoc(doc(db, "products", item.id));
                     const prodName = prodSnap.exists() ? prodSnap.data().name : "Spécimen supprimé";
-                    // NOUVEAU : Affichage du Lot sélectionné dans le pannel admin
                     const lotText = item.lotSize ? ` (Lot de ${item.lotSize})` : '';
                     itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}${lotText}</li>`;
                 }
             }
 
-            // Formatage de l'adresse de livraison si elle existe
-            let addressHtml = '<em>Pas d\'adresse (Paiement incomplet ou service)</em>';
-            if (order.shippingAddress) {
-                const addr = order.shippingAddress;
+            // NOUVEAU : Identification du mode de transport pour adapter l'affichage et éviter le message d'erreur générique
+            let addressHtml = '';
+            if (order.shippingMethod === 'retrait') {
                 addressHtml = `
-                    ${order.customerName}<br>
+                    <span style="color:#4d5d30; font-weight:bold; font-size: 1.05rem;">📦 Retrait sur place (Gratuit)</span><br>
+                    <strong>Nom du client :</strong> ${order.customerName || 'Client'}<br>
+                    <span style="color: #888; font-size: 0.85rem;">KM4 CENTER, Route d'Arles, Bouillargues</span>
+                `;
+            } else if (order.shippingAddress) {
+                const addr = order.shippingAddress;
+                const shippingBadge = order.shippingMethod === 'chrono18' ? '🚀 Chrono 18' : '🚚 Colissimo';
+                addressHtml = `
+                    <span style="color:#4d5d30; font-weight:bold; font-size: 1.05rem;">${shippingBadge}</span><br>
+                    ${order.customerName || 'Client'}<br>
                     ${addr.line1} ${addr.line2 ? '<br>' + addr.line2 : ''}<br>
                     ${addr.postalCode} ${addr.city}, ${addr.country}
                 `;
+            } else {
+                addressHtml = '<em>Pas d\'adresse (Paiement incomplet ou service)</em>';
             }
 
             const div = document.createElement('div');
-            div.className = 'order-card'; // Changement de classe pour appliquer un style de carte isolée
+            div.className = 'order-card'; 
             
             div.innerHTML = `
                 <div class="order-card-header">
@@ -475,7 +481,7 @@ async function loadOrders() {
                         <option value="En attente de paiement" ${order.status === 'En attente de paiement' ? 'selected' : ''}>En attente</option>
                         <option value="Payé" ${order.status === 'Payé' ? 'selected' : ''}>Payé (À préparer)</option>
                         <option value="En préparation" ${order.status === 'En preparation' ? 'selected' : ''}>En préparation</option>
-                        <option value="Expédié" ${order.status === 'Expédié' ? 'selected' : ''}>Expédié</option>
+                        <option value="Expédié" ${order.status === 'Expédié' ? 'selected' : ''}>Expédié / Prêt au retrait</option>
                     </select>
                 </div>
                 <div class="order-card-body">
@@ -485,9 +491,9 @@ async function loadOrders() {
                         <p class="order-price-total">Montant total : <strong>${order.amountValue || 0} €</strong></p>
                     </div>
                     <div class="order-col">
-                        <h4>Adresse de livraison :</h4>
+                        <h4>Adresse / Livraison :</h4>
                         <p class="order-address-text">${addressHtml}</p>
-                        <p class="order-contact-email">✉️ ${order.customerEmail || 'Anonyme'}</p>
+                        <p class="order-contact-email">✉️ ${order.customerEmail || 'Anonyme'}<br>📞 ${order.customerPhone || 'Non renseigné'}</p>
                     </div>
                 </div>
             `;

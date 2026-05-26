@@ -440,10 +440,6 @@ app.post('/api/create-checkout-session', async (req, res) => {
         const sessionConfig = {
             payment_method_types: ['card'],
             client_reference_id: String(orderId),
-            // NOUVEAU : Activation de la collecte obligatoire de l'adresse de livraison
-            shipping_address_collection: {
-                allowed_countries: ['FR', 'BE', 'CH', 'LU'],
-            },
             line_items: [
                 {
                     price_data: {
@@ -461,6 +457,13 @@ app.post('/api/create-checkout-session', async (req, res) => {
             success_url: `${clientUrl}/confirmation.html?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${clientUrl}/`,
         };
+
+        // NOUVEAU : On collecte l'adresse Stripe uniquement s'il y a expédition
+        if (orderData.shippingMethod !== 'retrait') {
+            sessionConfig.shipping_address_collection = {
+                allowed_countries: ['FR', 'BE', 'CH', 'LU'],
+            };
+        }
 
         if (userEmail) {
             sessionConfig.customer_email = userEmail;

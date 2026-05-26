@@ -1458,6 +1458,18 @@ footer {
 .weather-close-modal:hover {
     opacity: 0.6;
 }
+.shipping-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+.shipping-option:hover { background: #f9f8f2; }
+.shipping-option input[type="radio"] { width: 18px; height: 18px; accent-color: #4d5d30; }
 
 
 /* --- Responsive Mobile --- */
