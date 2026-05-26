@@ -447,25 +447,26 @@ async function loadOrders() {
                 }
             }
 
-            // NOUVEAU : Identification du mode de transport pour adapter l'affichage et éviter le message d'erreur générique
-            let addressHtml = '';
-            if (order.shippingMethod === 'retrait') {
-                addressHtml = `
-                    <span style="color:#4d5d30; font-weight:bold; font-size: 1.05rem;">📦 Retrait sur place (Gratuit)</span><br>
-                    <strong>Nom du client :</strong> ${order.customerName || 'Client'}<br>
-                    <span style="color: #888; font-size: 0.85rem;">KM4 CENTER, Route d'Arles, Bouillargues</span>
-                `;
-            } else if (order.shippingAddress) {
+            // NOUVEAU : Affichage structuré du mode de transport et des coordonnées
+            const shippingBadge = order.shippingMethod === 'chrono18' ? '🚀 Chrono 18' : (order.shippingMethod === 'retrait' ? '📦 Retrait sur place' : '🚚 Colissimo');
+            
+            let addressHtml = `
+                <div style="background: #eef2f5; padding: 8px 12px; border-radius: 6px; margin-bottom: 10px; display: inline-block;">
+                    <span style="color:#4a7599; font-weight:bold; font-size: 1.05rem;">${shippingBadge}</span>
+                </div>
+                <br><strong>Nom du client :</strong> ${order.customerName || 'Client'}<br>
+            `;
+
+            if (order.shippingMethod !== 'retrait' && order.shippingAddress) {
                 const addr = order.shippingAddress;
-                const shippingBadge = order.shippingMethod === 'chrono18' ? '🚀 Chrono 18' : '🚚 Colissimo';
-                addressHtml = `
-                    <span style="color:#4d5d30; font-weight:bold; font-size: 1.05rem;">${shippingBadge}</span><br>
-                    ${order.customerName || 'Client'}<br>
+                addressHtml += `
                     ${addr.line1} ${addr.line2 ? '<br>' + addr.line2 : ''}<br>
                     ${addr.postalCode} ${addr.city}, ${addr.country}
                 `;
+            } else if (order.shippingMethod === 'retrait') {
+                addressHtml += `<span style="color: #888; font-size: 0.85rem;">KM4 CENTER, Route d'Arles, Bouillargues</span>`;
             } else {
-                addressHtml = '<em>Pas d\'adresse (Paiement incomplet ou service)</em>';
+                addressHtml += '<em>Pas d\'adresse (Paiement incomplet ou service)</em>';
             }
 
             const div = document.createElement('div');
@@ -488,12 +489,15 @@ async function loadOrders() {
                     <div class="order-col">
                         <h4>Contenu du colis :</h4>
                         <ul>${itemsHtml}</ul>
-                        <p class="order-price-total">Montant total : <strong>${order.amountValue || 0} €</strong></p>
+                        <p class="order-price-total">Montant total : <strong>${Number(order.amountValue || 0).toFixed(2)} €</strong></p>
                     </div>
                     <div class="order-col">
                         <h4>Adresse / Livraison :</h4>
                         <p class="order-address-text">${addressHtml}</p>
-                        <p class="order-contact-email">✉️ ${order.customerEmail || 'Anonyme'}<br>📞 ${order.customerPhone || 'Non renseigné'}</p>
+                        <p class="order-contact-email">
+                            ✉️ ${order.customerEmail || 'Anonyme'}<br>
+                            📞 <strong>${order.customerPhone || 'Non renseigné'}</strong>
+                        </p>
                     </div>
                 </div>
             `;

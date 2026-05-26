@@ -178,19 +178,29 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     throw new Error("ALREADY_PROCESSED");
                 }
 
-                // 1. Déduction des stocks
+                // NOUVEAU : Lecture (GET) obligatoire des produits avant l'Update pour garantir le verrouillage de la transaction
+                const productSnaps = [];
+                const productRefs = [];
+
                 if (orderData.items && orderData.items.length > 0) {
                     for (const item of orderData.items) {
-                        const productRef = admin.firestore().collection('products').doc(item.id);
-                        
-                        const multiplier = item.lotSize || 1;
-                        const totalDeduction = item.quantity * multiplier;
-                        
-                        transaction.update(productRef, {
+                        const ref = admin.firestore().collection('products').doc(item.id);
+                        productRefs.push({ ref, item });
+                        productSnaps.push(await transaction.get(ref)); 
+                    }
+                }
+
+                // Application des déductions de stocks
+                productRefs.forEach((obj, index) => {
+                    const snap = productSnaps[index];
+                    if (snap.exists) {
+                        const multiplier = obj.item.lotSize || 1;
+                        const totalDeduction = obj.item.quantity * multiplier;
+                        transaction.update(obj.ref, {
                             stock: admin.firestore.FieldValue.increment(-totalDeduction)
                         });
                     }
-                }
+                });
 
                 // 2. Préparation et mise à jour immédiate du statut de la commande
                 const updatePayload = {
