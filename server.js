@@ -178,29 +178,73 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     throw new Error("ALREADY_PROCESSED");
                 }
 
-                // NOUVEAU : Lecture (GET) obligatoire des produits avant l'Update pour garantir le verrouillage de la transaction
-                const productSnaps = [];
-                const productRefs = [];
+                // NOUVEAU : Algorithme de gestion des stocks corrigé et ordonné
+                const stockDeductions = {}; 
+                const productsToFetch = [];
 
+                // Étape 1 : On liste tous les produits principaux de la commande
                 if (orderData.items && orderData.items.length > 0) {
                     for (const item of orderData.items) {
-                        const ref = admin.firestore().collection('products').doc(item.id);
-                        productRefs.push({ ref, item });
-                        productSnaps.push(await transaction.get(ref)); 
+                        productsToFetch.push({
+                            id: item.id,
+                            ref: admin.firestore().collection('products').doc(item.id),
+                            quantity: item.quantity,
+                            lotSize: item.lotSize || 1
+                        });
                     }
                 }
 
-                // Application des déductions de stocks
-                productRefs.forEach((obj, index) => {
-                    const snap = productSnaps[index];
-                    if (snap.exists) {
-                        const multiplier = obj.item.lotSize || 1;
-                        const totalDeduction = obj.item.quantity * multiplier;
-                        transaction.update(obj.ref, {
-                            stock: admin.firestore.FieldValue.increment(-totalDeduction)
-                        });
+                // Étape 2 : Première passe de lecture Firestore obligatoire pour les produits principaux
+                for (const p of productsToFetch) {
+                    const prodSnap = await transaction.get(p.ref);
+                    if (prodSnap.exists) {
+                        const prodData = prodSnap.data();
+
+                        // Correction : On vérifie la présence du tableau de composants du pack
+                        if (prodData.bundleItems && Array.isArray(prodData.bundleItems) && prodData.bundleItems.length > 0) {
+                            // C'EST UN PACK : On extrait ses composants
+                            for (const bItem of prodData.bundleItems) {
+                                const subId = bItem.productId;
+                                
+                                // NOUVEAU : Sécurisation mathématique pour éviter toute erreur de déduction silencieuse
+                                const itemLot = parseInt(bItem.lot) || 1;
+                                const itemQty = parseInt(bItem.qty) || 1;
+                                const qtyToDeduct = p.quantity * itemQty * itemLot;
+
+                                if (!stockDeductions[subId]) {
+                                    stockDeductions[subId] = {
+                                        ref: admin.firestore().collection('products').doc(subId),
+                                        amount: 0
+                                    };
+                                }
+                                stockDeductions[subId].amount += qtyToDeduct;
+                            }
+                        } else {
+                            // C'EST UN PRODUIT STANDARD
+                            const qtyToDeduct = p.quantity * p.lotSize;
+
+                            if (!stockDeductions[p.id]) {
+                                stockDeductions[p.id] = {
+                                    ref: p.ref,
+                                    amount: 0
+                                };
+                            }
+                            stockDeductions[p.id].amount += qtyToDeduct;
+                        }
                     }
-                });
+                }
+
+                // Étape 3 : Seconde passe de lecture pour les sous-produits des packs (Contrainte des Transactions Firestore)
+                for (const id in stockDeductions) {
+                    await transaction.get(stockDeductions[id].ref);
+                }
+
+                // Étape 4 : Application finale et sécurisée des déductions de stocks
+                for (const id in stockDeductions) {
+                    transaction.update(stockDeductions[id].ref, {
+                        stock: admin.firestore.FieldValue.increment(-stockDeductions[id].amount)
+                    });
+                }
 
                 // 2. Préparation et mise à jour immédiate du statut de la commande
                 const updatePayload = {
@@ -282,7 +326,14 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                                 </div>
                             </div>
                         </div>
-                    `
+                    `,
+                    // NOUVEAU : Ajout de la pièce jointe pour les CGV
+                    attachments: [
+                        {
+                            filename: 'CGV_Terra_Ophis.pdf',
+                            path: path.join(__dirname, 'public', 'assets', 'docs', 'CGV_Terra_Ophis.pdf')
+                        }
+                    ]
                 };
                 await transporter.sendMail(mailOptions);
                     console.log(`✅ Email de confirmation envoyé à ${customerEmail}`);

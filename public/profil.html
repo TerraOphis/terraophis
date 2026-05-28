@@ -97,6 +97,7 @@
                 </form>
 
                 <button onclick="window.logoutCustomer()" class="btn-logout-client">Se déconnecter</button>
+                <div id="adminButtonContainer" style="margin-top: 15px;"></div>
             </div>
 
             <div class="profile-box">
@@ -151,6 +152,14 @@
                 document.getElementById('postalCode').value = addr.postalCode || '';
                 document.getElementById('city').value = addr.city || '';
                 document.getElementById('country').value = addr.country || 'FR';
+            }
+
+            // NOUVEAU : Affichage du bouton admin pour les comptes autorisés
+            const adminContainer = document.getElementById('adminButtonContainer');
+            if (user.email === "martin.stuis11@gmail.com" || user.email === "terra.ophis@gmail.com") {
+                adminContainer.innerHTML = `<button onclick="window.location.href='admin/admin.html'" style="background: var(--accent-brown); color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; font-size: 0.8rem; width: 100%;">Accès Admin 🛡️</button>`;
+            } else {
+                adminContainer.innerHTML = '';
             }
 
             // Chargement de l'historique

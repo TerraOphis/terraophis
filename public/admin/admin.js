@@ -86,9 +86,13 @@ productForm.addEventListener('submit', async (e) => {
         const productData = {
             name: formData.get('name'),
             latinName: formData.get('latinName'),
-            stock: parseInt(formData.get('stock')),
+            // NOUVEAU : Sécurité pour forcer le stock à 0 s'il est masqué
+            stock: formData.get('stock') ? parseInt(formData.get('stock')) : 0,
+            oldPrice: formData.get('oldPrice') ? parseFloat(formData.get('oldPrice')) : null,
             category: formData.get('category'),
             difficulty: formData.get('difficulty'),
+            // NOUVEAU : Sauvegarde de la composition du pack
+            bundleItems: window.currentBundleItems.length > 0 ? window.currentBundleItems : null,
             description: formData.get('description'),
             careGuide: careGuideHtml,
             prices: prices, // Enregistrement de la map complète
@@ -122,7 +126,19 @@ window.editProduct = async (id) => {
             if (document.getElementById('editProductId')) document.getElementById('editProductId').value = id;
             if (document.getElementById('editName')) document.getElementById('editName').value = p.name || '';
             if (document.getElementById('editLatinName')) document.getElementById('editLatinName').value = p.latinName || '';
+            const editStockInput = document.getElementById('editStock');
+            if (editStockInput) {
+                if (p.bundleItems && p.bundleItems.length > 0) {
+                    editStockInput.style.display = 'none';
+                    editStockInput.required = false;
+                } else {
+                    editStockInput.style.display = 'inline-block';
+                    editStockInput.required = true;
+                    editStockInput.value = p.stock || 0;
+                }
+            }
             if (document.getElementById('editStock')) document.getElementById('editStock').value = p.stock || '';
+            if (document.getElementById('editOldPrice')) document.getElementById('editOldPrice').value = p.oldPrice || '';
             if (document.getElementById('editCategory')) document.getElementById('editCategory').value = p.category || '';
             if (document.getElementById('editDifficulty')) document.getElementById('editDifficulty').value = p.difficulty || '';
             if (document.getElementById('editDescription')) document.getElementById('editDescription').value = p.description || '';
@@ -291,11 +307,16 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             prices[input.dataset.lot] = parseFloat(input.value) || 0;
         });
 
-        // Correction : Gestion du champ stock vide, converti automatiquement en 0 pour Firestore
+        // NOUVEAU : On force le stock à 0 physique si c'est un pack, sinon on prend la valeur saisie
+        const editBundleBuilder = document.getElementById('editBundleBuilder'); // ou le container correspondant dans ta modale
+        const isPack = editBundleBuilder && editBundleBuilder.style.display === 'block';
+        const finalStock = isPack ? 0 : (formData.get('stock') ? parseInt(formData.get('stock')) : 0);
+
         await updateDoc(docRef, {
             name: formData.get('name'),
             latinName: formData.get('latinName'),
-            stock: formData.get('stock') ? parseInt(formData.get('stock')) : 0,
+            stock: finalStock,
+            oldPrice: formData.get('oldPrice') ? parseFloat(formData.get('oldPrice')) : null,
             category: formData.get('category'),
             difficulty: formData.get('difficulty'),
             description: formData.get('description'),
@@ -324,23 +345,43 @@ async function loadInventory() {
     const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
     
+    // NOUVEAU : On stocke tous les produits pour calculer les stocks virtuels des packs
+    const allProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Calcul du stock virtuel pour l'affichage admin
+    allProducts.forEach(p => {
+        if (p.bundleItems && p.bundleItems.length > 0) {
+            let virtualStock = Infinity;
+            p.bundleItems.forEach(bItem => {
+                const subProduct = allProducts.find(sub => sub.id === bItem.productId);
+                if (subProduct) {
+                    const possiblePacks = Math.floor(subProduct.stock / (bItem.qty * bItem.lot));
+                    if (possiblePacks < virtualStock) virtualStock = possiblePacks;
+                } else {
+                    virtualStock = 0;
+                }
+            });
+            p.stock = virtualStock === Infinity ? 0 : virtualStock;
+            p.isPack = true;
+        }
+    });
+
     container.innerHTML = '';
-    snap.forEach(productDoc => {
-        const p = productDoc.data();
+    allProducts.forEach(p => {
         const div = document.createElement('div');
         div.className = 'inventory-item';
         
         let stockClass = "stock-out";
-        let stockText = "Rupture";
+        let stockText = p.isPack ? "Rupture (Composants)" : "Rupture";
+        
         if (p.stock > 10) {
             stockClass = "stock-high";
-            stockText = `${p.stock} en stock`;
+            stockText = p.isPack ? `${p.stock} packs possibles` : `${p.stock} en stock`;
         } else if (p.stock > 0) {
             stockClass = "stock-low";
-            stockText = `Reste ${p.stock}`;
+            stockText = p.isPack ? `Max ${p.stock} packs` : `Reste ${p.stock}`;
         }
         
-        // Nouveau : Logique d'affichage dynamique des prix (si pas de prix unitaire, affiche les lots)
         let priceContent = '';
         if (p.prices && Object.keys(p.prices).length > 0) {
             priceContent = Object.entries(p.prices).map(([lot, pr]) => `<span>Lot x${lot}: ${pr} €</span>`).join('<br>');
@@ -353,13 +394,12 @@ async function loadInventory() {
             priceContent = lots.length > 0 ? lots.join('<br>') : '<strong>-</strong>';
         }
 
-        // Nouveau : Extraction de la première photo pour l'aperçu miniature
         const firstPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : '../assets/img/placeholder.jpg';
         
         div.innerHTML = `
             <img src="${firstPhoto}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
             <div style="display:flex; flex-direction:column; gap:5px;">
-                <span style="font-weight:600; font-size:1.1rem;">${p.name}</span>
+                <span style="font-weight:600; font-size:1.1rem;">${p.name} ${p.isPack ? '📦' : ''}</span>
                 <span style="font-size:0.85rem; color:#888; text-transform:capitalize;">${p.category} | ${p.latinName || 'N/A'}</span>
             </div>
             <div>
@@ -369,8 +409,8 @@ async function loadInventory() {
                 <span class="stock-badge ${stockClass}">${stockText}</span>
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
-                <button onclick="editProduct('${productDoc.id}')" class="btn-outline">Gérer</button>
-                <button onclick="deleteProduct('${productDoc.id}')" class="btn-logout" style="border:none;">Supprimer</button>
+                <button onclick="editProduct('${p.id}')" class="btn-outline">Gérer</button>
+                <button onclick="deleteProduct('${p.id}')" class="btn-logout" style="border:none;">Supprimer</button>
             </div>
         `;
         container.appendChild(div);
@@ -1159,13 +1199,15 @@ window.loadAdminCategories = async () => {
     const categoriesSnap = await getDocs(collection(db, "categories"));
     
     let listHtml = '';
-    let selectOptionsHtml = '<option value="" disabled selected>Choisir une catégorie...</option>';
-    let editOptionsHtml = '';
+    
+    // NOUVEAU : Retour aux optgroups classiques (Titres non-sélectionnables)
+    let optionsAnimaux = '<optgroup label="▶ ANIMAUX">';
+    let optionsMateriels = '<optgroup label="▶ MATÉRIELS & ACCESSOIRES">';
+    let optionsPacks = '<optgroup label="▶ KITS & PACKS">';
 
     categoriesSnap.forEach(catDoc => {
         const cat = catDoc.data();
         
-        // NOUVEAU : Ajout du bouton "Modifier" à côté du bouton "Supprimer"
         listHtml += `
             <div class="inventory-item" style="grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: center;">
                 <div><strong>${cat.name}</strong> <span style="font-size:0.8rem; color:#888;">(${catDoc.id})</span></div>
@@ -1178,13 +1220,29 @@ window.loadAdminCategories = async () => {
                 </div>
             </div>
         `;
-        selectOptionsHtml += `<option value="${catDoc.id}">${cat.name}</option>`;
-        editOptionsHtml += `<option value="${catDoc.id}">${cat.name}</option>`;
+        
+        const optionHtml = `<option value="${catDoc.id}" data-type="${cat.type}">${cat.name}</option>`;
+        
+        if (cat.type === 'materiels') {
+            optionsMateriels += optionHtml;
+        } else if (cat.type === 'packs') {
+            optionsPacks += optionHtml;
+        } else {
+            optionsAnimaux += optionHtml;
+        }
     });
 
+    // Fermeture des balises optgroup
+    optionsAnimaux += '</optgroup>';
+    optionsMateriels += '</optgroup>';
+    optionsPacks += '</optgroup>';
+
+    const defaultOption = '<option value="" disabled selected>Choisir une catégorie...</option>';
+    const fullOptionsHtml = defaultOption + optionsAnimaux + optionsMateriels + optionsPacks;
+
     listContainer.innerHTML = listHtml || '<p>Aucune catégorie configurée.</p>';
-    if (productCatSelect) productCatSelect.innerHTML = selectOptionsHtml;
-    if (editCatSelect) editCatSelect.innerHTML = editOptionsHtml;
+    if (productCatSelect) productCatSelect.innerHTML = fullOptionsHtml;
+    if (editCatSelect) editCatSelect.innerHTML = fullOptionsHtml;
 };
 
 window.generatePriceInputs = async (containerId, categoryId, existingPrices = null) => {
@@ -1194,13 +1252,27 @@ window.generatePriceInputs = async (containerId, categoryId, existingPrices = nu
     const catSnap = await getDoc(doc(db, "categories", categoryId));
     if (!catSnap.exists()) return;
 
-    const lots = catSnap.data().lots;
+    const catData = catSnap.data();
+    let lots = catData.lots;
+    
+    // NOUVEAU : Sécurité anti-bug. Si la catégorie n'a pas de lots (ou tableau vide), on force un lot de 1.
+    if (!lots || lots.length === 0) {
+        lots = [1];
+    }
+
+    const isPack = catData.type === 'packs';
+
     container.innerHTML = lots.map(lot => {
         const value = existingPrices && existingPrices[lot] !== undefined ? existingPrices[lot] : '';
+        
+        // NOUVEAU : Changement dynamique du titre et de la couleur si c'est un pack
+        const labelText = isPack && lot === 1 ? "Prix de vente du Kit / Pack (€)" : `Prix Lot de ${lot} (€)`;
+        const labelColor = isPack ? "#4d5d30" : "var(--accent-brown)";
+
         return `
             <div style="flex: 1; min-width: 120px;">
-                <label style="font-size:0.8rem; font-weight:600; display:block; margin-bottom:5px;">Prix Lot de ${lot} (€)</label>
-                <input type="number" class="lot-price-input" data-lot="${lot}" placeholder="Ex: 15.00" step="0.01" value="${value}" required>
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:5px; color: ${labelColor};">${labelText}</label>
+                <input type="number" class="lot-price-input" data-lot="${lot}" placeholder="Ex: 29.90" step="0.01" value="${value}" required>
             </div>
         `;
     }).join('');
@@ -1351,6 +1423,117 @@ async function loadAboutPageAdmin() {
     } catch (err) {
         console.error("Erreur d'initialisation À Propos :", err);
     }
+}
+
+
+// ==========================================
+// NOUVEAU : SYSTÈME DE GESTION DES PACKS
+// ==========================================
+window.currentBundleItems = []; // Stocke les articles du pack en cours de création
+
+window.toggleBundleBuilder = async (selectElement, builderId) => {
+    const builder = document.getElementById(builderId);
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const type = selectedOption.getAttribute('data-type');
+
+    // NOUVEAU : On cible le champ stock selon si on est dans la création ou l'édition
+    const stockInput = builderId === 'bundleBuilder' 
+        ? document.querySelector('#productForm input[name="stock"]') 
+        : document.getElementById('editStock');
+
+    if (type === 'packs') {
+        builder.style.display = 'block';
+        // NOUVEAU : On masque le champ stock et on le rend facultatif
+        if (stockInput) {
+            stockInput.style.display = 'none';
+            stockInput.required = false;
+            stockInput.value = '0'; // On force à 0 en base de données
+        }
+        await loadAllProductsForBundle();
+    } else {
+        builder.style.display = 'none';
+        // NOUVEAU : On réaffiche le champ stock
+        if (stockInput) {
+            stockInput.style.display = ''; // Retour au style par défaut
+            stockInput.required = true;
+        }
+        window.currentBundleItems = [];
+        const listEl = document.getElementById('bundleItemsList');
+        if (listEl) listEl.innerHTML = '';
+    }
+};
+
+async function loadAllProductsForBundle() {
+    const datalist = document.getElementById('bundleDataList');
+    if (datalist.options.length > 0) return; // Évite de recharger si déjà fait
+
+    try {
+        const snap = await getDocs(collection(db, "products"));
+        let optionsHtml = '';
+        
+        snap.forEach(docSnap => {
+            const p = docSnap.data();
+            if (p.bundleItems && p.bundleItems.length > 0) return; // On ne met pas un pack dans un pack
+            
+            let lots = p.prices ? Object.keys(p.prices).map(Number) : [1];
+            
+            lots.sort((a, b) => a - b).forEach(lot => {
+                // Le texte visible dans la recherche (value) et l'ID caché (data-id)
+                optionsHtml += `<option value="${p.name} (Lot de ${lot})" data-id="${docSnap.id}_${lot}"></option>`;
+            });
+        });
+        datalist.innerHTML = optionsHtml;
+    } catch (error) {
+        console.error("Erreur de chargement des articles pour le pack :", error);
+    }
+}
+
+window.addBundleItem = (inputId, qtyId, listId) => {
+    const input = document.getElementById(inputId);
+    const qtyInput = document.getElementById(qtyId);
+    const datalist = document.getElementById('bundleDataList');
+    
+    if (!input.value) return;
+
+    // On cherche l'option exacte que l'utilisateur a cliquée/tapée
+    const option = Array.from(datalist.options).find(opt => opt.value === input.value);
+    
+    if (!option) {
+        alert("Veuillez sélectionner un article suggéré dans la liste.");
+        return;
+    }
+
+    const [productId, lot] = option.getAttribute('data-id').split('_');
+    const name = input.value.split(' (Lot')[0]; // Récupère juste le nom
+    const qty = parseInt(qtyInput.value);
+
+    window.currentBundleItems.push({
+        productId: productId,
+        name: name,
+        lot: parseInt(lot),
+        qty: qty
+    });
+
+    // Remise à zéro pour le prochain ajout
+    input.value = '';
+    qtyInput.value = '1';
+
+    renderBundleItems(listId);
+};
+
+window.removeBundleItem = (index, listId) => {
+    window.currentBundleItems.splice(index, 1);
+    renderBundleItems(listId);
+};
+
+function renderBundleItems(listId) {
+    const list = document.getElementById(listId);
+    list.innerHTML = window.currentBundleItems.map((item, index) => `
+        <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-light);">
+            <span>${item.qty}x ${item.name} (Lot de ${item.lot})</span>
+            <button type="button" onclick="window.removeBundleItem(${index}, '${listId}')" style="color: var(--error-red); border: none; background: none; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button>
+        </li>
+    `).join('');
 }
 
 // NOUVEAU : Intercepte la validation pour uploader les fichiers dans leurs tableaux respectifs

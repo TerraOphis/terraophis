@@ -45,7 +45,7 @@
                     </div>
 
                     <div class="form-group">
-                        <select name="category" id="adminProductCategory" required onchange="generatePriceInputs('dynamicPricesContainer', this.value)">
+                        <select name="category" id="adminProductCategory" required onchange="window.generatePriceInputs('dynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'bundleBuilder');">
                             <option value="" disabled selected>Chargement des catégories... ⏳</option>
                         </select>
                         <select name="difficulty" required>
@@ -55,11 +55,26 @@
                             <option value="expert">Expert</option>
                         </select>
                     </div>
-                    <div id="dynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;">
-                        <p style="font-size: 0.85rem; color: #888; margin: 0;">Sélectionnez une catégorie pour configurer les prix de ses lots.</p>
+
+                    <div id="bundleBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Composition du Kit / Pack</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            
+                            <input type="text" id="bundleItemSearch" list="bundleDataList" placeholder="Rechercher un article... (ex: Cloporte)" style="flex: 1; min-width: 200px;">
+                            <datalist id="bundleDataList"></datalist>
+                            
+                            <input type="number" id="bundleItemQty" value="1" min="1" style="width: 70px; flex-grow: 0;" title="Nombre de fois cet article">
+                            <button type="button" onclick="window.addBundleItem('bundleItemSearch', 'bundleItemQty', 'bundleItemsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        
+                        </div>
+                        <ul id="bundleItemsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
+
+                    <div id="dynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
+
                     <div class="form-group">
                         <input type="number" name="stock" placeholder="Quantité en stock" required>
+                        <input type="number" name="oldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
                     </div>
                     <textarea name="description" placeholder="Description de l'espèce..." rows="4" required></textarea>
                     
@@ -201,8 +216,9 @@
                         <select id="newCatType" required>
                             <option value="animaux">Animaux</option>
                             <option value="materiels">Matériels & Accessoires</option>
+                            <option value="packs">Packs & Kits</option>
                         </select>
-                        <input type="text" id="newCatLots" placeholder="Lots désirés séparés par des virgules (ex: 1,5,10 ou 1,3)" required>
+                        <input type="text" id="newCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
                         <input type="number" id="newCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required title="Le lot qui sera affiché en évidence sur la boutique">
                     </div>
                     <button type="submit" class="btn-buy">AJOUTER LA CATÉGORIE</button>
@@ -318,11 +334,27 @@
                     
                     <div class="form-group">
                         <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">
+                        <input type="number" name="oldPrice" id="editOldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
                     </div>
                     <textarea name="description" id="editDescription" placeholder="Description de l'espèce..." rows="4" required></textarea>
 
                     <div class="editor-container">
                         <div class="editor-toolbar">
+                            <select onchange="formatDoc('fontName', this.value)" title="Police" style="padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; background: var(--white); cursor: pointer;">
+                                <option value="Montserrat, sans-serif">Montserrat</option>
+                                <option value="Playfair Display, serif">Playfair Display</option>
+                                <option value="Arial, sans-serif">Arial</option>
+                            </select>
+                            <select onchange="formatDoc('fontSize', this.value)" title="Taille" style="padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; background: var(--white); cursor: pointer;">
+                                <option value="1">Très petit</option>
+                                <option value="2">Petit</option>
+                                <option value="3" selected>Normal</option>
+                                <option value="4">Moyen</option>
+                                <option value="5">Grand</option>
+                                <option value="6">Très grand</option>
+                            </select>
+                            <span class="toolbar-separator"></span>
+
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
                             <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>

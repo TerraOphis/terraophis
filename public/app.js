@@ -66,6 +66,7 @@ async function loadCatalogue() {
 
     if (categoryFilter) {
         let optionsHtml = '<option value="all">Toutes les catégories</option>';
+        
         categoriesSnap.forEach(catDoc => {
             optionsHtml += `<option value="${catDoc.id}">${catDoc.data().name}</option>`;
         });
@@ -86,6 +87,26 @@ async function loadCatalogue() {
             id: doc.id,
             ...doc.data()
         }));
+
+        // NOUVEAU : Calcul du stock virtuel pour les packs directement dans le catalogue
+        allProducts.forEach(p => {
+            if (p.bundleItems && p.bundleItems.length > 0) {
+                let virtualStock = Infinity;
+                p.bundleItems.forEach(bItem => {
+                    // On cherche l'insecte composant le pack parmi tous les produits déjà chargés
+                    const subProduct = allProducts.find(sub => sub.id === bItem.productId);
+                    if (subProduct) {
+                        // Combien de ce pack on peut faire avec le stock restant de cet insecte ?
+                        const possiblePacks = Math.floor(subProduct.stock / (bItem.qty * bItem.lot));
+                        if (possiblePacks < virtualStock) virtualStock = possiblePacks;
+                    } else {
+                        virtualStock = 0; // Si un composant n'existe plus, pack épuisé
+                    }
+                });
+                // On remplace le 0 de la base de données par le stock virtuel calculé
+                p.stock = virtualStock === Infinity ? 0 : virtualStock;
+            }
+        });
 
         const renderProducts = (productsToDisplay) => {
             productGrid.innerHTML = ''; 
@@ -138,6 +159,8 @@ async function loadCatalogue() {
                     ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(l'unité)</span>` 
                     : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
                 
+                const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.9rem; margin-right: 8px; font-weight: normal;">${product.oldPrice} €</span>` : '';
+
                 const isActuallyOutOfStock = product.stock < minLotSize;
                 const hasLots = (product.prices && Object.keys(product.prices).length > 1) || product.price5 || product.price10 || product.price3;
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
@@ -156,7 +179,7 @@ async function loadCatalogue() {
                         <div class="product-info">
                             <p class="product-latin">${product.latinName}</p>
                             <h3 class="product-name">${product.name}</h3>
-                            <p class="product-price">${basePrice} €${lotText}</p>
+                            <p class="product-price">${oldPriceHtml}${basePrice} €${lotText}</p>
                         </div>
                     </a>
                     <button class="btn-buy" onclick="${btnAction}" ${isActuallyOutOfStock ? 'disabled' : ''} style="${isActuallyOutOfStock ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
@@ -278,7 +301,25 @@ async function loadProductDetails() {
 
         if (docSnap.exists()) {
             const product = docSnap.data();
+            
+            // NOUVEAU : Calcul du stock virtuel si on atterrit directement sur la fiche d'un pack
+            if (product.bundleItems && product.bundleItems.length > 0) {
+                let virtualStock = Infinity;
+                for (const bItem of product.bundleItems) {
+                    const subSnap = await getDoc(doc(db, "products", bItem.productId));
+                    if (subSnap.exists()) {
+                        const subStock = subSnap.data().stock;
+                        const possiblePacks = Math.floor(subStock / (bItem.qty * bItem.lot));
+                        if (possiblePacks < virtualStock) virtualStock = possiblePacks;
+                    } else {
+                        virtualStock = 0;
+                    }
+                }
+                product.stock = virtualStock === Infinity ? 0 : virtualStock;
+            }
+
             const photos = product.photos && product.photos.length > 0 ? product.photos : ['assets/img/placeholder.jpg'];
+            const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 1.4rem; margin-right: 12px; font-weight: normal;">${product.oldPrice} €</span>` : '';
             const formattedDescription = product.description.replace(/\n/g, '<br>');
             const careGuideHtml = product.careGuide ? product.careGuide.replace(/\n/g, '<br>') : 'Aucune information complémentaire.';
 
@@ -359,7 +400,7 @@ async function loadProductDetails() {
                     <div class="product-right">
                         <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
                         <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName}</p>
-                        <p class="product-price" id="displayPrice" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${defaultPrice} €</p>
+                        <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${defaultPrice} €</span></p>
                         
                         ${lotSelectorHtml}
 
@@ -400,39 +441,119 @@ window.addSelectedToCart = (id) => {
     addToCart(id, lotSize);
 };
 
-// NOUVEAU : Logique du panier mise à jour pour inclure les lots
-window.addToCart = async (productId, lotSize = null) => {
-    const docSnap = await getDoc(doc(db, "products", productId));
-    if (!docSnap.exists()) return;
-    const maxStock = docSnap.data().stock;
-
-    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+// NOUVEAU : Fonction de validation globale du stock croisé
+async function validateCartStock(simulatedCart) {
+    let physicalNeeds = {};
     
-    const cartId = lotSize ? `${productId}_${lotSize}` : productId;
-    const existingItem = cart.find(item => item.cartId === cartId);
+    // Récupération des définitions de tous les produits du panier
+    const uniqueProductIds = [...new Set(simulatedCart.map(i => i.id))];
+    const productDefs = {};
     
-    // NOUVEAU : On calcule le total d'insectes que l'utilisateur essaie d'ajouter
-    const multiplier = lotSize || 1;
-    const currentCartQty = existingItem ? existingItem.quantity : 0;
-    const projectedTotalInsects = (currentCartQty + 1) * multiplier;
-
-    if (projectedTotalInsects > maxStock) {
-        alert("Stock insuffisant pour ajouter cette quantité 🌿");
-        return;
+    for(const id of uniqueProductIds) {
+        const snap = await getDoc(doc(db, "products", id));
+        if(snap.exists()) productDefs[id] = snap.data();
     }
 
+    // Calcul de la quantité physique nécessaire pour CHAQUE insecte
+    for (const simItem of simulatedCart) {
+        const def = productDefs[simItem.id];
+        if (!def) continue;
+
+        if (def.bundleItems && def.bundleItems.length > 0) {
+            // C'est un pack : on déballe le pack pour compter les insectes
+            for (const bItem of def.bundleItems) {
+                if (!physicalNeeds[bItem.productId]) physicalNeeds[bItem.productId] = 0;
+                physicalNeeds[bItem.productId] += simItem.quantity * bItem.qty * bItem.lot;
+            }
+        } else {
+            // C'est un insecte normal
+            const multiplier = simItem.lotSize || 1;
+            if (!physicalNeeds[simItem.id]) physicalNeeds[simItem.id] = 0;
+            physicalNeeds[simItem.id] += simItem.quantity * multiplier;
+        }
+    }
+
+    // Vérification finale : est-ce que les besoins dépassent le stock réel ?
+    for (const [pId, neededQty] of Object.entries(physicalNeeds)) {
+        let realStock = 0;
+        if (productDefs[pId]) {
+            realStock = productDefs[pId].stock;
+        } else {
+            const snap = await getDoc(doc(db, "products", pId));
+            if (snap.exists()) realStock = snap.data().stock;
+        }
+
+        if (neededQty > realStock) {
+            return false; // Impossible, on bloque l'ajout !
+        }
+    }
+    return true; // Le panier est valide
+}
+
+// NOUVEAU : Logique du panier avec gestion du Stock Croisé
+window.addToCart = async (productId, lotSize = null) => {
+    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+    const cartId = lotSize ? `${productId}_${lotSize}` : productId;
+
+    // 1. On simule le panier AVEC le nouvel ajout
+    let simulatedCart = JSON.parse(JSON.stringify(cart));
+    const existingItem = simulatedCart.find(item => item.cartId === cartId);
+    
     if (existingItem) {
         existingItem.quantity += 1;
     } else {
-        cart.push({ id: productId, cartId: cartId, lotSize: lotSize, quantity: 1 });
+        simulatedCart.push({ id: productId, cartId: cartId, lotSize: lotSize, quantity: 1 });
     }
+
+    // 2. On vérifie si ce panier simulé est mathématiquement possible avec les stocks réels
+    const isPossible = await validateCartStock(simulatedCart);
+
+    if (!isPossible) {
+        alert("Stock insuffisant ! Certains insectes sont déjà réservés par d'autres articles ou packs de votre panier. 🌿");
+        return;
+    }
+
+    // 3. Si c'est validé, on sauvegarde
+    localStorage.setItem('terraophis_cart', JSON.stringify(simulatedCart));
     
-    localStorage.setItem('terraophis_cart', JSON.stringify(cart));
-    
-    // NOUVEAU : Mise à jour de la bulle avant l'ouverture de la barre latérale
     if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
-    
     toggleCart(true); 
+};
+
+window.updateCartQty = async (cartId, change) => {
+    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
+    const itemIndex = cart.findIndex(item => item.cartId === cartId);
+    
+    if (itemIndex > -1) {
+        const item = cart[itemIndex];
+        const newQty = item.quantity + change;
+        
+        if (newQty <= 0) {
+            cart.splice(itemIndex, 1);
+            localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+            renderCart();
+            if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+            return;
+        }
+
+        // Si on essaie d'ajouter un article (bouton +)
+        if (change > 0) {
+            let simulatedCart = JSON.parse(JSON.stringify(cart));
+            simulatedCart[itemIndex].quantity = newQty;
+
+            const isPossible = await validateCartStock(simulatedCart);
+            if (!isPossible) {
+                alert("Stock maximum atteint compte tenu des autres articles de votre panier 🌿");
+                return;
+            }
+        }
+        
+        cart[itemIndex].quantity = newQty;
+        localStorage.setItem('terraophis_cart', JSON.stringify(cart));
+        renderCart();
+        
+        if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
+    }
 };
 
 window.renderCart = async () => {
@@ -468,8 +589,25 @@ window.renderCart = async () => {
             const docSnap = await getDoc(doc(db, "products", cart[i].id));
             if (docSnap.exists()) {
                 const p = docSnap.data();
-                const itemLot = cart[i].lotSize;
+                const itemLot = cart[i].lotSize; 
                 
+                // NOUVEAU : Vérification du stock virtuel du pack pour le panier
+                let maxStock = p.stock;
+                if (p.bundleItems && p.bundleItems.length > 0) {
+                    let virtualStock = Infinity;
+                    for (const bItem of p.bundleItems) {
+                        const subSnap = await getDoc(doc(db, "products", bItem.productId));
+                        if (subSnap.exists()) {
+                            const subStock = subSnap.data().stock;
+                            const possiblePacks = Math.floor(subStock / (bItem.qty * bItem.lot));
+                            if (possiblePacks < virtualStock) virtualStock = possiblePacks;
+                        } else {
+                            virtualStock = 0;
+                        }
+                    }
+                    maxStock = virtualStock;
+                }
+
                 let itemPrice = 0;
                 if (p.prices && p.prices[itemLot] !== undefined) {
                     itemPrice = p.prices[itemLot];
@@ -479,8 +617,8 @@ window.renderCart = async () => {
 
                 const multiplier = itemLot || 1;
                 
-                if ((cart[i].quantity * multiplier) > p.stock) {
-                    cart[i].quantity = Math.floor(p.stock / multiplier);
+                if ((cart[i].quantity * multiplier) > maxStock) {
+                    cart[i].quantity = Math.floor(maxStock / multiplier);
                     cartModified = true;
                 }
                 
@@ -496,23 +634,25 @@ window.renderCart = async () => {
                 const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
                 const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
 
+                // NOUVEAU : Création de la balise du prix barré s'il est configuré
+                const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${p.oldPrice} €</span>` : '';
+
                 html += `
                     <div class="cart-item" style="position: relative;">
                         <img src="${photo}" alt="${p.name}">
                         <div class="cart-item-details">
                             <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
                             <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
-                            <p class="cart-item-price">${itemPrice} €</p>
+                            <p class="cart-item-price">${oldPriceHtml}${itemPrice} €</p>
                             <div class="cart-qty-controls">
-                                <button onclick="updateCartQty('${cart[i].cartId}', -1, ${p.stock})">-</button>
+                                <button onclick="updateCartQty('${cart[i].cartId}', -1)">-</button>
                                 <span>${cart[i].quantity}</span>
-                                <button onclick="updateCartQty('${cart[i].cartId}', 1, ${p.stock})">+</button>
+                                <button onclick="updateCartQty('${cart[i].cartId}', 1)">+</button>
                             </div>
                         </div>
                     </div>
                 `;
             } else {
-                // NOUVEAU : Si le produit a été supprimé de la base de données, on le retire du panier local !
                 cart.splice(i, 1);
                 cartModified = true;
                 i--;
@@ -536,32 +676,6 @@ window.renderCart = async () => {
     container.innerHTML = html;
     totalEl.textContent = total.toFixed(2) + ' €';
     localStorage.setItem('terraophis_cart_total', total);
-};
-
-window.updateCartQty = (cartId, change, maxStock) => {
-    let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-    const itemIndex = cart.findIndex(item => item.cartId === cartId);
-    
-    if (itemIndex > -1) {
-        const item = cart[itemIndex];
-        const multiplier = item.lotSize || 1;
-        const newQty = item.quantity + change;
-        
-        // NOUVEAU : Vérification de la nouvelle quantité selon le lot
-        if (change > 0 && (newQty * multiplier) > maxStock) {
-            alert("Stock maximum atteint pour ce spécimen 🌿");
-            return;
-        }
-        
-        cart[itemIndex].quantity = newQty;
-        if (cart[itemIndex].quantity <= 0) cart.splice(itemIndex, 1);
-        
-        localStorage.setItem('terraophis_cart', JSON.stringify(cart));
-        renderCart();
-        
-        // NOUVEAU : Synchronisation après ajustement manuel (+ / -)
-        if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
-    }
 };
 
 // Ligne précédente
@@ -662,7 +776,6 @@ async function loadHeroSlider() {
                 const tag = link.trim() ? 'a' : 'div';
                 const hrefAttr = link.trim() ? `href="${link}"` : '';
                 
-                // NOUVEAU : Ajout de pointer-events (auto/none) pour éviter de bloquer le clic
                 sliderHtml += `
                     <${tag} ${hrefAttr} class="slide" style="display: block; text-decoration: none; background-image: url('${url}'); position: absolute; top:0; left:0; width: 100%; height: 100%; opacity: ${index === 0 ? 1 : 0}; pointer-events: ${index === 0 ? 'auto' : 'none'}; transition: opacity 1s ease-in-out; background-size: cover; background-position: center; z-index: 1;">
                         ${bannerHtml}
@@ -679,10 +792,10 @@ async function loadHeroSlider() {
 
                 const goToSlide = (n) => {
                     slides[current].style.opacity = 0;
-                    slides[current].style.pointerEvents = 'none'; // NOUVEAU : Bloque le clic de l'ancienne
+                    slides[current].style.pointerEvents = 'none'; 
                     current = (n + slides.length) % slides.length;
                     slides[current].style.opacity = 1;
-                    slides[current].style.pointerEvents = 'auto'; // NOUVEAU : Autorise le clic de la nouvelle
+                    slides[current].style.pointerEvents = 'auto'; 
                 };
 
                 const nextSlide = () => goToSlide(current + 1);
@@ -701,10 +814,10 @@ async function loadHeroSlider() {
 
                 const resetInterval = () => {
                     clearInterval(sliderInterval);
-                    sliderInterval = setInterval(nextSlide, 5000);
+                    sliderInterval = setInterval(nextSlide, 8000); // NOUVEAU : Délai augmenté à 8 secondes
                 };
                 
-                sliderInterval = setInterval(nextSlide, 5000);
+                sliderInterval = setInterval(nextSlide, 8000); // NOUVEAU : Délai augmenté à 8 secondes
             }
         } else {
             heroHeader.style.display = 'none';
@@ -755,24 +868,29 @@ async function loadNavbar() {
         const html = await response.text();
         navElement.innerHTML = html;
 
-        // NOUVEAU : Chargement et construction dynamique des catégories dans le menu de la navbar
         const dropdownContent = navElement.querySelector('.dropdown-content');
         if (dropdownContent) {
             const categoriesSnap = await getDocs(collection(db, "categories"));
+            
+            // NOUVEAU : Retour aux textes purs, non-cliquables
             let animauxHtml = '<li class="dropdown-subtitle">ANIMAUX</li>';
-            let materielsHtml = '<li class="dropdown-divider"></li><li class="dropdown-subtitle">MATÉRIELS</li>';
+            let materielsHtml = '<li class="dropdown-divider"></li><li class="dropdown-subtitle">MATÉRIELS & ACCESSOIRES</li>';
+            let packsHtml = '<li class="dropdown-divider"></li><li class="dropdown-subtitle">KITS & PACKS</li>';
             
             categoriesSnap.forEach(catDoc => {
                 const cat = catDoc.data();
                 const itemHtml = `<li><a href="boutique.html?cat=${catDoc.id}">→ ${cat.name.toUpperCase()}</a></li>`;
+                
                 if (cat.type === 'materiels') {
                     materielsHtml += itemHtml;
+                } else if (cat.type === 'packs') {
+                    packsHtml += itemHtml;
                 } else {
                     animauxHtml += itemHtml;
                 }
             });
             
-            dropdownContent.innerHTML = animauxHtml + materielsHtml;
+            dropdownContent.innerHTML = animauxHtml + materielsHtml + packsHtml;
         }
 
         const currentPage = window.location.pathname;
