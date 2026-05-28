@@ -24,6 +24,7 @@ onAuthStateChanged(auth, (user) => {
             loadInventory(); 
             loadOrders();
             loadSliderPreview();
+            loadShippingConfig();
             loadGridPreviews();
             loadGuides();
             loadAdminWeather();
@@ -1761,3 +1762,62 @@ window.deleteSliderImg = async (index) => {
         console.error("Erreur suppression de la slide :", error);
     }
 };
+
+// Récupère la configuration actuelle des livraisons sur Firestore pour pré-remplir le formulaire d'administration
+async function loadShippingConfig() {
+    try {
+        const docRef = doc(db, "config", "shipping");
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            
+            if (document.getElementById('shippingColissimo')) {
+                document.getElementById('shippingColissimo').value = data.colissimo ?? '';
+            }
+            if (document.getElementById('shippingChrono13')) {
+                document.getElementById('shippingChrono13').value = data.chrono13 ?? '';
+            }
+            if (document.getElementById('shippingThreshold')) {
+                document.getElementById('shippingThreshold').value = data.threshold ?? '';
+            }
+            if (document.getElementById('shippingHeatPack')) {
+                document.getElementById('shippingHeatPack').value = data.heatPack ?? '';
+            }
+        }
+    } catch (error) {
+        console.error("Erreur lors de la récupération des tarifs de livraison :", error);
+    }
+}
+
+// Intercepte la soumission du formulaire pour enregistrer les nouveaux tarifs et le seuil dans Firestore
+document.getElementById('shippingConfigForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    
+    btn.disabled = true;
+    btn.textContent = "ENREGISTREMENT... ⏳";
+
+    const colissimo = parseFloat(document.getElementById('shippingColissimo').value);
+    const chrono13 = parseFloat(document.getElementById('shippingChrono13').value);
+    const threshold = parseFloat(document.getElementById('shippingThreshold').value);
+    const heatPack = parseFloat(document.getElementById('shippingHeatPack').value);
+
+    try {
+        await setDoc(doc(db, "config", "shipping"), {
+            colissimo,
+            chrono13,
+            threshold,
+            heatPack
+        }, { merge: true });
+        
+        alert("La configuration des livraisons a été mise à jour avec succès !");
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde de la configuration :", error);
+        alert("Une erreur est survenue lors de l'enregistrement des tarifs.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+});

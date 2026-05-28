@@ -28,6 +28,7 @@
             <button class="tab-btn" onclick="switchTab('tab-affichage', this)">Affichage</button>
             <button class="tab-btn" onclick="switchTab('tab-categories', this)">Catégories</button>
             <button class="tab-btn" onclick="switchTab('tab-guides', this)">Guides</button>
+            <button class="tab-btn" onclick="switchTab('tab-livraisons', this)">Livraisons</button>
         </div>
 
         <button id="btnLogout" class="btn-logout">Déconnexion</button>
@@ -290,6 +291,35 @@
             <section class="admin-section">
                 <h2>Fiches conseils existantes</h2>
                 <div id="adminGuides" class="inventory-list"></div>
+            </section>
+        </div>
+
+        <div id="tab-livraisons" class="tab-content" style="display: none;">
+            <section class="admin-section" style="margin-top: 30px; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <h2 style="font-family: 'Playfair Display', serif; color: var(--accent-brown); margin-bottom: 15px;">Configuration des Livraisons</h2>
+                <form id="shippingConfigForm" class="product-form">
+                    <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingColissimo" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Colissimo (€)</label>
+                            <input type="number" id="shippingColissimo" step="0.01" placeholder="ex: 8.90" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingChrono13" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Chrono 13 (€)</label>
+                            <input type="number" id="shippingChrono13" step="0.01" placeholder="ex: 14.90" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingThreshold" style="display: block; margin-bottom: 5px; font-weight: 600;">Seuil Livraison Gratuite (€)</label>
+                            <input type="number" id="shippingThreshold" step="0.01" placeholder="ex: 100.00" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingHeatPack" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Chaufferette (€)</label>
+                            <input type="number" id="shippingHeatPack" step="0.01" placeholder="ex: 2.00" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-buy" style="width: auto; padding: 12px 25px;">ENREGISTRER LA CONFIGURATION</button>
+                </form>
             </section>
         </div>
         

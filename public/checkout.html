@@ -55,11 +55,11 @@
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <label class="shipping-option">
                     <input type="radio" name="shippingMethod" value="colissimo" checked>
-                    <span><strong>Colissimo (2 jours ouvrés)</strong> - 8.90 € <span id="colissimoFreeText" style="color: #4d5d30; font-weight: bold; display: none;">(OFFERT)</span><br><small>Départ Lun au Mer. Offert dès 100€ d'achat.</small></span>
+                    <span><strong>Colissimo (2 jours ouvrés)</strong> - <span id="colissimoLabelPrice">8.90</span> € <span id="colissimoFreeText" style="color: #4d5d30; font-weight: bold; display: none;">(OFFERT)</span><br><small>Départ Lun au Mer. Offert dès <span id="colissimoLabelThreshold">100</span>€ d'achat.</small></span>
                 </label>
                 <label class="shipping-option">
-                    <input type="radio" name="shippingMethod" value="chrono18">
-                    <span><strong>Chrono 18 (Express)</strong> - 14.90 €<br><small>Demain avant 18h. Départ Lun au Jeu.</small></span>
+                    <input type="radio" name="shippingMethod" value="chrono13">
+                    <span><strong>Chrono 13 (Express)</strong> - <span id="chronoLabelPrice">14.90</span> €<br><small>Demain avant 13h. Départ Lun au Mer.</small></span>
                 </label>
                 <label class="shipping-option">
                     <input type="radio" name="shippingMethod" value="retrait">
@@ -126,37 +126,39 @@
         import { doc, getDoc, collection, addDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // NOUVEAU : Mise à jour des tarifs
-        const HEAT_PACK_COST = 2.00; 
+        let HEAT_PACK_COST = 2.00; 
+        let colissimoCost = 8.90;
+        let chronoCost = 14.90;
+        let freeShippingThreshold = 100.00;
+
         let cart = [];
         let subtotal = 0;
         let isColdWeather = false; 
-        let isHotWeather = false;  
+        let isHotWeather = false;
 
-        // NOUVEAU : Calcule le total en fonction du mode de livraison choisi
+        // Calcule les totaux de la commande en fonction du mode sélectionné et des tarifs de la base de données
         const updateTotals = () => {
             const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked').value;
             let currentShipping = 0;
             let shippingText = "Frais de port";
 
-            // Gestion Colissimo Offert
-            const freeColissimo = subtotal >= 100;
+            const freeColissimo = subtotal >= freeShippingThreshold;
             const colissimoText = document.getElementById('colissimoFreeText');
             if (colissimoText) colissimoText.style.display = freeColissimo ? 'inline' : 'none';
 
             if (shippingMethod === 'colissimo') {
-                currentShipping = freeColissimo ? 0 : 8.90;
+                currentShipping = freeColissimo ? 0 : colissimoCost;
                 shippingText = freeColissimo ? "Colissimo (Offert)" : "Livraison Colissimo";
-            } else if (shippingMethod === 'chrono18') {
-                currentShipping = 14.90;
-                shippingText = "Livraison Express Chrono 18";
+            } else if (shippingMethod === 'chrono13') {
+                currentShipping = chronoCost;
+                shippingText = "Livraison Express Chrono 13";
             } else if (shippingMethod === 'retrait') {
                 currentShipping = 0;
                 shippingText = "Retrait Pink Tropical";
             }
 
-            // Ajout chaufferette uniquement si ce n'est pas un retrait
             if (isColdWeather && shippingMethod !== 'retrait') {
-                currentShipping += 2.00; // Nouveau prix : 2€
+                currentShipping += HEAT_PACK_COST;
                 shippingText += " + Chaufferette";
             }
 
@@ -166,7 +168,7 @@
             document.getElementById('chkShipping').textContent = currentShipping.toFixed(2) + ' €';
             document.getElementById('chkTotal').textContent = (subtotal + currentShipping).toFixed(2) + ' €';
         };
-
+        
         // 2. ÉCOUTEURS POUR LE CHANGEMENT DE MODE
         document.querySelectorAll('input[name="shippingMethod"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -370,10 +372,30 @@
             }
         });
 
+        // Écoute l'état d'authentification et charge la configuration des tarifs ainsi que les données utilisateur
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 window.location.href = '/connexion.html';
                 return;
+            }
+
+            // Récupération des tarifs dynamiques configurés par l'administrateur
+            try {
+                const configSnap = await getDoc(doc(db, "config", "shipping"));
+                if (configSnap.exists()) {
+                    const configData = configSnap.data();
+                    if (configData.heatPack !== undefined) HEAT_PACK_COST = parseFloat(configData.heatPack);
+                    if (configData.colissimo !== undefined) colissimoCost = parseFloat(configData.colissimo);
+                    if (configData.chrono13 !== undefined) chronoCost = parseFloat(configData.chrono13);
+                    if (configData.threshold !== undefined) freeShippingThreshold = parseFloat(configData.threshold);
+                    
+                    // Injection des tarifs dans les libellés textuels du formulaire
+                    if (document.getElementById('colissimoLabelPrice')) document.getElementById('colissimoLabelPrice').textContent = colissimoCost.toFixed(2);
+                    if (document.getElementById('colissimoLabelThreshold')) document.getElementById('colissimoLabelThreshold').textContent = freeShippingThreshold.toFixed(2);
+                    if (document.getElementById('chronoLabelPrice')) document.getElementById('chronoLabelPrice').textContent = chronoCost.toFixed(2);
+                }
+            } catch (error) {
+                console.error("Erreur lors de la récupération des tarifs de livraison:", error);
             }
 
             cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
@@ -393,19 +415,18 @@
                 if (userSnap.data().address) {
                     const addr = userSnap.data().address;
                     document.getElementById('chkLine1').value = addr.line1 || '';
-                document.getElementById('chkLine2').value = addr.line2 || '';
-                document.getElementById('chkPostal').value = addr.postalCode || '';
-                document.getElementById('chkCity').value = addr.city || '';
-                document.getElementById('chkCountry').value = addr.country || 'FR';
-                
-                // NOUVEAU : Si l'adresse est pré-remplie, on vérifie la météo direct
-                if (addr.city) window.checkWeather();
-            }
+                    document.getElementById('chkLine2').value = addr.line2 || '';
+                    document.getElementById('chkPostal').value = addr.postalCode || '';
+                    document.getElementById('chkCity').value = addr.city || '';
+                    document.getElementById('chkCountry').value = addr.country || 'FR';
+                    
+                    if (addr.city) window.checkWeather();
+                }
             }
 
             const container = document.getElementById('checkoutItems');
             let html = '';
-            let validCart = []; // NOUVEAU : Pour nettoyer le panier si besoin
+            let validCart = [];
 
             for (let i = 0; i < cart.length; i++) {
                 if(cart[i].quantity <= 0) continue; 
@@ -427,7 +448,6 @@
                 const itemTotal = itemPrice * cart[i].quantity;
                 const lotText = itemLot ? ` (Lot de ${itemLot})` : '';
 
-                // NOUVEAU : Calcul et affichage du prix barré pour le checkout
                 let oldPriceHtml = '';
                 if (pSnap.exists() && pSnap.data().oldPrice) {
                     const oldItemTotal = (pSnap.data().oldPrice * cart[i].quantity).toFixed(2);
@@ -443,7 +463,6 @@
             }
             container.innerHTML = html;
 
-            // On sauvegarde le panier nettoyé
             if(validCart.length !== cart.length) {
                 cart = validCart;
                 localStorage.setItem('terraophis_cart', JSON.stringify(cart));
@@ -453,6 +472,7 @@
             updateTotals(); 
         });
 
+        // Gère la soumission du formulaire, crée la commande dans Firestore avec les options choisies et redirige vers Stripe
         document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btnFinalPay');
@@ -461,17 +481,15 @@
 
             const user = auth.currentUser;
             
-            // NOUVEAU : Récupération du mode et recalcul final
             const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked').value;
             let currentShipping = 0;
             
-            if (shippingMethod === 'colissimo') currentShipping = subtotal >= 100 ? 0 : 8.90;
-            if (shippingMethod === 'chrono18') currentShipping = 14.90;
+            if (shippingMethod === 'colissimo') currentShipping = subtotal >= freeShippingThreshold ? 0 : colissimoCost;
+            if (shippingMethod === 'chrono13') currentShipping = chronoCost;
             if (isColdWeather && shippingMethod !== 'retrait') currentShipping += HEAT_PACK_COST;
 
             const totalWithShipping = subtotal + currentShipping;
 
-            // NOUVEAU : On ignore l'adresse si c'est un retrait
             const shippingAddress = shippingMethod === 'retrait' ? null : {
                 line1: document.getElementById('chkLine1').value,
                 line2: document.getElementById('chkLine2').value,
@@ -481,7 +499,6 @@
             };
 
             try {
-                // NOUVEAU : On sauvegarde toujours le téléphone dans le profil utilisateur
                 const userUpdates = { phone: document.getElementById('chkPhone').value };
                 if (shippingAddress) userUpdates.address = shippingAddress;
                 await setDoc(doc(db, "users", user.uid), userUpdates, { merge: true });
@@ -490,11 +507,11 @@
                     userId: user.uid,
                     customerEmail: user.email,
                     customerName: document.getElementById('chkName').value,
-                    customerPhone: document.getElementById('chkPhone').value, // AJOUT : Sauvegarde du téléphone directement sur la commande
+                    customerPhone: document.getElementById('chkPhone').value,
                     items: cart,
                     amountValue: totalWithShipping,
                     shippingCost: currentShipping,
-                    shippingMethod: shippingMethod, // NOUVEAU
+                    shippingMethod: shippingMethod,
                     status: 'En attente de paiement',
                     shippingAddress: shippingAddress,
                     hasHeatPack: (isColdWeather && shippingMethod !== 'retrait'),
