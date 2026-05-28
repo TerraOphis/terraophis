@@ -88,23 +88,22 @@ async function loadCatalogue() {
             ...doc.data()
         }));
 
-        // NOUVEAU : Calcul du stock virtuel pour les packs directement dans le catalogue
+        // NOUVEAU : Calcul des stocks virtuels pour les packs sur la boutique publique
         allProducts.forEach(p => {
             if (p.bundleItems && p.bundleItems.length > 0) {
                 let virtualStock = Infinity;
                 p.bundleItems.forEach(bItem => {
-                    // On cherche l'insecte composant le pack parmi tous les produits déjà chargés
                     const subProduct = allProducts.find(sub => sub.id === bItem.productId);
                     if (subProduct) {
-                        // Combien de ce pack on peut faire avec le stock restant de cet insecte ?
+                        // On calcule combien de packs complets on peut faire avec le stock de ce composant
                         const possiblePacks = Math.floor(subProduct.stock / (bItem.qty * bItem.lot));
                         if (possiblePacks < virtualStock) virtualStock = possiblePacks;
                     } else {
-                        virtualStock = 0; // Si un composant n'existe plus, pack épuisé
+                        virtualStock = 0;
                     }
                 });
-                // On remplace le 0 de la base de données par le stock virtuel calculé
                 p.stock = virtualStock === Infinity ? 0 : virtualStock;
+                p.isPack = true;
             }
         });
 
