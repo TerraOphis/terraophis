@@ -82,6 +82,10 @@
                         <div class="editor-toolbar">
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
                             <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <span class="toolbar-separator"></span>
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" title="Couleur du texte" style="cursor: pointer; width: 25px; height: 25px; padding: 0; border: none; background: transparent;">
+                            <span class="toolbar-separator"></span>
+                            
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
                         </div>
                         <div id="productCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)"></div>
@@ -357,6 +361,10 @@
 
                             <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
                             <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <span class="toolbar-separator"></span>
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" title="Couleur du texte" style="cursor: pointer; width: 25px; height: 25px; padding: 0; border: none; background: transparent;">
+                            <span class="toolbar-separator"></span>
+                            
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
                         </div>
                         <div id="editCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire..."></div>
