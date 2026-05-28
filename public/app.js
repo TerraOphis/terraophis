@@ -95,8 +95,10 @@ async function loadCatalogue() {
                 p.bundleItems.forEach(bItem => {
                     const subProduct = allProducts.find(sub => sub.id === bItem.productId);
                     if (subProduct) {
-                        // On calcule combien de packs complets on peut faire avec le stock de ce composant
-                        const possiblePacks = Math.floor(subProduct.stock / (bItem.qty * bItem.lot));
+                        const subStock = parseInt(subProduct.stock) || 0;
+                        const itemLot = parseInt(bItem.lot) || 1;
+                        const itemQty = parseInt(bItem.qty) || 1;
+                        const possiblePacks = Math.floor(subStock / (itemQty * itemLot));
                         if (possiblePacks < virtualStock) virtualStock = possiblePacks;
                     } else {
                         virtualStock = 0;
@@ -307,8 +309,10 @@ async function loadProductDetails() {
                 for (const bItem of product.bundleItems) {
                     const subSnap = await getDoc(doc(db, "products", bItem.productId));
                     if (subSnap.exists()) {
-                        const subStock = subSnap.data().stock;
-                        const possiblePacks = Math.floor(subStock / (bItem.qty * bItem.lot));
+                        const subStock = parseInt(subSnap.data().stock) || 0;
+                        const itemLot = parseInt(bItem.lot) || 1;
+                        const itemQty = parseInt(bItem.qty) || 1;
+                        const possiblePacks = Math.floor(subStock / (itemQty * itemLot));
                         if (possiblePacks < virtualStock) virtualStock = possiblePacks;
                     } else {
                         virtualStock = 0;
@@ -462,7 +466,9 @@ async function validateCartStock(simulatedCart) {
             // C'est un pack : on déballe le pack pour compter les insectes
             for (const bItem of def.bundleItems) {
                 if (!physicalNeeds[bItem.productId]) physicalNeeds[bItem.productId] = 0;
-                physicalNeeds[bItem.productId] += simItem.quantity * bItem.qty * bItem.lot;
+                const itemLot = parseInt(bItem.lot) || 1;
+                const itemQty = parseInt(bItem.qty) || 1;
+                physicalNeeds[bItem.productId] += simItem.quantity * itemQty * itemLot;
             }
         } else {
             // C'est un insecte normal
@@ -581,7 +587,7 @@ window.renderCart = async () => {
     
     let total = 0;
     let html = '';
-    let cartModified = false; // NOUVEAU : On track les modifications silencieuses du panier
+    let cartModified = false;
 
     for (let i = 0; i < cart.length; i++) {
         try {
@@ -590,21 +596,23 @@ window.renderCart = async () => {
                 const p = docSnap.data();
                 const itemLot = cart[i].lotSize; 
                 
-                // NOUVEAU : Vérification du stock virtuel du pack pour le panier
-                let maxStock = p.stock;
+                // NOUVEAU : Sécurisation du calcul de stock virtuel pour éviter les "NaN"
+                let maxStock = parseInt(p.stock) || 0;
                 if (p.bundleItems && p.bundleItems.length > 0) {
                     let virtualStock = Infinity;
                     for (const bItem of p.bundleItems) {
                         const subSnap = await getDoc(doc(db, "products", bItem.productId));
                         if (subSnap.exists()) {
-                            const subStock = subSnap.data().stock;
-                            const possiblePacks = Math.floor(subStock / (bItem.qty * bItem.lot));
+                            const subStock = parseInt(subSnap.data().stock) || 0;
+                            const itemLot = parseInt(bItem.lot) || 1;
+                            const itemQty = parseInt(bItem.qty) || 1;
+                            const possiblePacks = Math.floor(subStock / (itemQty * itemLot));
                             if (possiblePacks < virtualStock) virtualStock = possiblePacks;
                         } else {
                             virtualStock = 0;
                         }
                     }
-                    maxStock = virtualStock;
+                    maxStock = virtualStock === Infinity ? 0 : virtualStock;
                 }
 
                 let itemPrice = 0;
@@ -633,7 +641,6 @@ window.renderCart = async () => {
                 const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
                 const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
 
-                // NOUVEAU : Création de la balise du prix barré s'il est configuré
                 const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${p.oldPrice} €</span>` : '';
 
                 html += `
@@ -659,19 +666,16 @@ window.renderCart = async () => {
         } catch (e) { console.error("Erreur panier :", e); }
     }
 
-    // NOUVEAU : Sauvegarde globale des modifications et mise à jour de la bulle
     if (cartModified) {
         localStorage.setItem('terraophis_cart', JSON.stringify(cart));
         if (typeof window.updateFloatingCart === 'function') window.updateFloatingCart();
     }
 
-    // NOUVEAU : Si après nettoyage des articles obsolètes le panier est vide, on relance le rendu pour afficher "panier vide" proprement
     if (cart.length === 0) {
         renderCart();
         return;
     }
 
-    // NOUVEAU : On remplace le message "Panier obsolète" par une simple injection du HTML
     container.innerHTML = html;
     totalEl.textContent = total.toFixed(2) + ' €';
     localStorage.setItem('terraophis_cart_total', total);
