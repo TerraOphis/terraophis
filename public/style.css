@@ -521,6 +521,8 @@ footer {
     margin-bottom: 25px;
     /* Suppression du filtre blanc pour garder les couleurs originales */
     filter: none; 
+    background-color:var(--primary-beige);
+    border-radius: 50%;
 }
 
 .footer-nav {
