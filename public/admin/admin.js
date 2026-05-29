@@ -7,7 +7,86 @@ const statusMsg = document.getElementById('uploadStatus');
 
 // --- SÉCURITÉ & AUTHENTIFICATION ---
 
-// --- SÉCURITÉ & AUTHENTIFICATION ---
+// NOUVEAU: Logique globale pour les Options Personnalisées (Matériels)
+window.currentCustomOptions = { name: "", variants: [] };
+
+window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
+    const builder = document.getElementById(builderId);
+    const pricesContainer = document.getElementById(pricesContainerId);
+    if(!builder || !pricesContainer) return;
+    
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const type = selectedOption.getAttribute('data-type');
+
+    if (type === 'materiels') {
+        builder.style.display = 'block';
+        pricesContainer.style.display = 'none'; // On cache les prix par lots
+    } else {
+        builder.style.display = 'none';
+        pricesContainer.style.display = 'block';
+    }
+};
+
+window.addCustomOption = (valueId, priceId, listId) => {
+    const valueInput = document.getElementById(valueId);
+    const priceInput = document.getElementById(priceId);
+    
+    if (!valueInput.value || !priceInput.value) return;
+
+    window.currentCustomOptions.variants.push({
+        label: valueInput.value.trim(),
+        price: parseFloat(priceInput.value)
+    });
+
+    valueInput.value = '';
+    priceInput.value = '';
+    window.renderCustomOptions(listId);
+};
+
+window.removeCustomOption = (index, listId) => {
+    window.currentCustomOptions.variants.splice(index, 1);
+    window.renderCustomOptions(listId);
+};
+
+window.renderCustomOptions = (listId) => {
+    const list = document.getElementById(listId);
+    list.innerHTML = window.currentCustomOptions.variants.map((variant, index) => `
+        <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
+            <span><strong>${variant.label}</strong> : ${variant.price.toFixed(2)} €</span>
+            <button type="button" onclick="window.removeCustomOption(${index}, '${listId}')" style="color: #a35d5d; border: none; background: none; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button>
+        </li>
+    `).join('');
+};
+
+// NOUVEAU: Fonction radicale pour unifier et nettoyer le texte d'un éditeur
+window.unifyEditorText = (editorId) => {
+    const editor = document.getElementById(editorId);
+    if (!editor) return;
+
+    // 1. Nettoyage HTML pur : suppression des attributs style résiduels
+    editor.querySelectorAll('*').forEach(el => {
+        el.removeAttribute('style');
+        el.removeAttribute('class');
+        el.removeAttribute('face');
+        el.removeAttribute('size');
+        el.removeAttribute('color');
+    });
+
+    // 2. Sélection de tout le contenu
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    // 3. Application forcée de la police de base
+    document.execCommand('fontName', false, 'Montserrat, sans-serif');
+    document.execCommand('fontSize', false, '3');
+    document.execCommand('foreColor', false, '#4a4238'); // var(--accent-brown)
+    
+    selection.removeAllRanges();
+    alert("Texte nettoyé et unifié avec succès ! ✨");
+};
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
@@ -84,19 +163,29 @@ productForm.addEventListener('submit', async (e) => {
             prices[input.dataset.lot] = parseFloat(input.value) || 0;
         });
 
+        // NOUVEAU : Sauvegarde des options personnalisées si c'est du matériel
+        const selectCat = document.getElementById('adminProductCategory');
+        const isMateriel = selectCat.options[selectCat.selectedIndex].getAttribute('data-type') === 'materiels';
+        let customOpts = null;
+        if (isMateriel && window.currentCustomOptions.variants.length > 0) {
+            customOpts = {
+                name: document.getElementById('customOptionName').value || "Option",
+                variants: window.currentCustomOptions.variants
+            };
+        }
+
         const productData = {
             name: formData.get('name'),
-            latinName: formData.get('latinName'),
-            // NOUVEAU : Sécurité pour forcer le stock à 0 s'il est masqué
+            latinName: formData.get('latinName') || null, // NOUVEAU : Désormais optionnel
             stock: formData.get('stock') ? parseInt(formData.get('stock')) : 0,
             oldPrice: formData.get('oldPrice') ? parseFloat(formData.get('oldPrice')) : null,
             category: formData.get('category'),
-            difficulty: formData.get('difficulty'),
-            // NOUVEAU : Sauvegarde de la composition du pack
+            difficulty: formData.get('difficulty') || null, // NOUVEAU : Désormais optionnel
             bundleItems: window.currentBundleItems.length > 0 ? window.currentBundleItems : null,
+            customOptions: customOpts, // NOUVEAU : Injection des options
             description: formData.get('description'),
             careGuide: careGuideHtml,
-            prices: prices, // Enregistrement de la map complète
+            prices: prices,
             photos: photoUrls,
             createdAt: serverTimestamp()
         };
@@ -149,6 +238,21 @@ window.editProduct = async (id) => {
             await generatePriceInputs('editDynamicPricesContainer', p.category, p.prices || {
                 "1": p.price, "3": p.price3, "5": p.price5, "10": p.price10
             });
+
+            // NOUVEAU : Restauration des options custom pour l'édition
+            window.currentCustomOptions = { name: "", variants: [] };
+            if (p.customOptions && p.customOptions.variants) {
+                window.currentCustomOptions = p.customOptions;
+                document.getElementById('editCustomOptionName').value = p.customOptions.name || "";
+                window.renderCustomOptions('editCustomOptionsList');
+                
+                // On s'assure d'afficher le builder et cacher les lots
+                document.getElementById('editCustomOptionsBuilder').style.display = 'block';
+                document.getElementById('editDynamicPricesContainer').style.display = 'none';
+            } else {
+                document.getElementById('editCustomOptionsBuilder').style.display = 'none';
+                document.getElementById('editDynamicPricesContainer').style.display = 'block';
+            }
             
             renderEditPhotos(p.photos || [], id);
             document.getElementById('editProductModal').style.display = 'flex';
@@ -308,21 +412,32 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             prices[input.dataset.lot] = parseFloat(input.value) || 0;
         });
 
-        // NOUVEAU : On force le stock à 0 physique si c'est un pack, sinon on prend la valeur saisie
-        const editBundleBuilder = document.getElementById('editBundleBuilder'); // ou le container correspondant dans ta modale
+        // NOUVEAU : Sauvegarde des options personnalisées à l'édition
+        const editSelectCat = document.getElementById('editCategory');
+        const isMaterielEdit = editSelectCat.options[editSelectCat.selectedIndex].getAttribute('data-type') === 'materiels';
+        let customOptsEdit = null;
+        if (isMaterielEdit && window.currentCustomOptions.variants.length > 0) {
+            customOptsEdit = {
+                name: document.getElementById('editCustomOptionName').value || "Option",
+                variants: window.currentCustomOptions.variants
+            };
+        }
+
+        const editBundleBuilder = document.getElementById('editBundleBuilder');
         const isPack = editBundleBuilder && editBundleBuilder.style.display === 'block';
         const finalStock = isPack ? 0 : (formData.get('stock') ? parseInt(formData.get('stock')) : 0);
 
         await updateDoc(docRef, {
             name: formData.get('name'),
-            latinName: formData.get('latinName'),
+            latinName: formData.get('latinName') || null,
             stock: finalStock,
             oldPrice: formData.get('oldPrice') ? parseFloat(formData.get('oldPrice')) : null,
             category: formData.get('category'),
-            difficulty: formData.get('difficulty'),
+            difficulty: formData.get('difficulty') || null,
             description: formData.get('description'),
             careGuide: careGuideHtml,
             prices: prices, 
+            customOptions: customOptsEdit, // NOUVEAU
             photos: finalPhotos
         });
 
@@ -1821,3 +1936,4 @@ document.getElementById('shippingConfigForm')?.addEventListener('submit', async 
         btn.textContent = originalText;
     }
 });
+

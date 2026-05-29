@@ -119,23 +119,33 @@ async function loadCatalogue() {
             productsToDisplay.forEach((product) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
                 
-            // NOUVEAU : Calcul du lot minimum pour savoir si l'article est VRAIMENT achetable
                 let minLotSize = 1;
                 let basePrice = 0;
                 let displayLot = 1;
+                let lotText = ''; // NOUVEAU: Rendu dynamique pour ne pas bloquer sur "(le lot de X)"
                 
                 const catInfo = categoriesMap[product.category];
                 const preferredLot = catInfo ? catInfo.defaultDisplayLot : null;
 
-                if (product.prices && Object.keys(product.prices).length > 0) {
+                // NOUVEAU : Gestion de l'affichage pour le matériel avec options personnalisées
+                if (product.customOptions && product.customOptions.variants && product.customOptions.variants.length > 0) {
+                    const cheapest = product.customOptions.variants.reduce((prev, curr) => prev.price < curr.price ? prev : curr);
+                    basePrice = cheapest.price;
+                    lotText = ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(à partir de)</span>`;
+                    minLotSize = 1; // Le stock est lu à l'unité pour le matériel
+                } 
+                // Fin NOUVEAU
+                else if (product.prices && Object.keys(product.prices).length > 0) {
                     const lots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
                     const maxLot = lots[0];
                     
-                    // Sélection du lot préféré s'il existe et est disponible sur ce produit, sinon lot maximum
                     displayLot = (preferredLot && product.prices[preferredLot] !== undefined) ? preferredLot : maxLot;
-                    
                     minLotSize = lots[lots.length - 1];
                     basePrice = product.prices[displayLot];
+                    
+                    lotText = displayLot === 1 
+                        ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(l'unité)</span>` 
+                        : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
                     
                 } else {
                     // Rétrocompatibilité : on applique aussi la logique du lot préféré ici !
@@ -163,7 +173,11 @@ async function loadCatalogue() {
                 const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.9rem; margin-right: 8px; font-weight: normal;">${product.oldPrice} €</span>` : '';
 
                 const isActuallyOutOfStock = product.stock < minLotSize;
-                const hasLots = (product.prices && Object.keys(product.prices).length > 1) || product.price5 || product.price10 || product.price3;
+                
+                // NOUVEAU : Vérifie si le produit a des options custom pour afficher le bon bouton
+                const hasCustomOptions = product.customOptions && product.customOptions.variants && product.customOptions.variants.length > 0;
+                const hasLots = (product.prices && Object.keys(product.prices).length > 1) || product.price5 || product.price10 || product.price3 || hasCustomOptions;
+                
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
                 
@@ -331,12 +345,32 @@ async function loadProductDetails() {
                 thumbnailsHtml += `<img src="${photo}" alt="Miniature" onclick="document.getElementById('mainProductImg').src='${photo}'">`;
             });
 
-            // NOUVEAU : Construction dynamique du sélecteur de lots avec vérification des stocks
+            // NOUVEAU : Construction dynamique du sélecteur pour les options personnalisées (Matériel)
             let lotSelectorHtml = '';
             let defaultPrice = 0;
-            let canBuySomething = false; // Variable pour vérifier s'il reste au moins UNE option achetable
+            let canBuySomething = false; 
             
-            if (product.prices && Object.keys(product.prices).length > 0) {
+            if (product.customOptions && product.customOptions.variants && product.customOptions.variants.length > 0) {
+                // Tri par prix croissant
+                const variants = product.customOptions.variants.sort((a, b) => a.price - b.price);
+                defaultPrice = variants[0].price;
+                
+                lotSelectorHtml = `
+                    <div class="lot-selector">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:5px;">${product.customOptions.name || 'Option'}</label>
+                        <select id="lotSelect" onchange="updateDisplayPrice()">
+                            ${variants.map(v => {
+                                const isDisabled = product.stock < 1 ? 'disabled' : ''; // Pour le matériel, 1 de stock suffit
+                                if (!isDisabled) canBuySomething = true;
+                                
+                                return `<option value="${v.label}" ${isDisabled}>${v.label} - ${v.price} € ${isDisabled ? '(Rupture de stock)' : ''}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                `;
+            } 
+            // Fin NOUVEAU
+            else if (product.prices && Object.keys(product.prices).length > 0) {
                 const sortedLots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
                 
                 // On cherche le plus gros lot qu'il est possible d'acheter pour le mettre par défaut
@@ -440,7 +474,12 @@ window.updateDisplayPrice = () => {
 
 window.addSelectedToCart = (id) => {
     const select = document.getElementById('lotSelect');
-    const lotSize = select ? parseInt(select.value) : null;
+    // NOUVEAU : Si la valeur est du texte (ex: "10cm"), on la garde en string, sinon on parse l'entier.
+    let lotSize = null;
+    if (select) {
+        const val = select.value;
+        lotSize = /^\d+$/.test(val) ? parseInt(val) : val;
+    }
     addToCart(id, lotSize);
 };
 
@@ -471,8 +510,9 @@ async function validateCartStock(simulatedCart) {
                 physicalNeeds[bItem.productId] += simItem.quantity * itemQty * itemLot;
             }
         } else {
-            // C'est un insecte normal
-            const multiplier = simItem.lotSize || 1;
+            // C'est un insecte normal ou un matériel
+            // NOUVEAU : Si lotSize est un texte (Option matériel), le multiplicateur de stock est toujours 1.
+            const multiplier = (typeof simItem.lotSize === 'number') ? simItem.lotSize : 1;
             if (!physicalNeeds[simItem.id]) physicalNeeds[simItem.id] = 0;
             physicalNeeds[simItem.id] += simItem.quantity * multiplier;
         }
@@ -601,28 +641,24 @@ window.renderCart = async () => {
                 if (p.bundleItems && p.bundleItems.length > 0) {
                     let virtualStock = Infinity;
                     for (const bItem of p.bundleItems) {
-                        const subSnap = await getDoc(doc(db, "products", bItem.productId));
-                        if (subSnap.exists()) {
-                            const subStock = parseInt(subSnap.data().stock) || 0;
-                            const itemLot = parseInt(bItem.lot) || 1;
-                            const itemQty = parseInt(bItem.qty) || 1;
-                            const possiblePacks = Math.floor(subStock / (itemQty * itemLot));
-                            if (possiblePacks < virtualStock) virtualStock = possiblePacks;
-                        } else {
-                            virtualStock = 0;
-                        }
+                        // ...
                     }
                     maxStock = virtualStock === Infinity ? 0 : virtualStock;
                 }
 
+                // NOUVEAU : Récupération du prix si c'est une option personnalisée texte
                 let itemPrice = 0;
-                if (p.prices && p.prices[itemLot] !== undefined) {
+                if (p.customOptions && p.customOptions.variants && typeof itemLot === 'string') {
+                    const variant = p.customOptions.variants.find(v => v.label === itemLot);
+                    if (variant) itemPrice = variant.price;
+                } else if (p.prices && p.prices[itemLot] !== undefined) {
                     itemPrice = p.prices[itemLot];
                 } else {
                     itemPrice = itemLot === 1 ? p.price : p[`price${itemLot}`] || p.price || 0;
                 }
 
-                const multiplier = itemLot || 1;
+                // NOUVEAU : Multiplicateur à 1 si c'est du matériel
+                const multiplier = (typeof itemLot === 'number') ? itemLot : 1;
                 
                 if ((cart[i].quantity * multiplier) > maxStock) {
                     cart[i].quantity = Math.floor(maxStock / multiplier);
@@ -639,7 +675,14 @@ window.renderCart = async () => {
                 const itemTotal = itemPrice * cart[i].quantity;
                 total += itemTotal;
                 const photo = p.photos?.length > 0 ? p.photos[0] : 'assets/img/placeholder.jpg';
-                const lotText = itemLot ? `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>` : '';
+                
+                // NOUVEAU : Affichage textuel propre selon si c'est un lot ou une option matérielle
+                let lotText = '';
+                if (typeof itemLot === 'string') {
+                    lotText = `<br><span style="font-size:0.75rem; color:#888;">Option : ${itemLot}</span>`;
+                } else if (itemLot && itemLot > 1) {
+                    lotText = `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>`;
+                }
 
                 const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${p.oldPrice} €</span>` : '';
 

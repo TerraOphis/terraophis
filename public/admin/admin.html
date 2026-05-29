@@ -42,14 +42,14 @@
                 <form id="productForm" class="product-form">
                     <div class="form-group">
                         <input type="text" name="name" placeholder="Nom commun (ex: Mante Orchidée)" required>
-                        <input type="text" name="latinName" placeholder="Nom latin (ex: Hymenopus coronatus)" required>
+                        <input type="text" name="latinName" placeholder="Nom latin (ex: Hymenopus coronatus)">
                     </div>
 
                     <div class="form-group">
-                        <select name="category" id="adminProductCategory" required onchange="window.generatePriceInputs('dynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'bundleBuilder');">
+                        <select name="category" id="adminProductCategory" required onchange="window.generatePriceInputs('dynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'bundleBuilder'); if(window.toggleCustomOptions) window.toggleCustomOptions(this, 'customOptionsBuilder', 'dynamicPricesContainer');">
                             <option value="" disabled selected>Chargement des catégories... ⏳</option>
                         </select>
-                        <select name="difficulty" required>
+                        <select name="difficulty">
                             <option value="" disabled selected>Difficulté...</option>
                             <option value="debutant">Débutant</option>
                             <option value="intermediaire">Intermédiaire</option>
@@ -73,6 +73,17 @@
 
                     <div id="dynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
 
+                    <div id="customOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options personnalisées (ex: Dimensions, Contenances)</h4>
+                        <input type="text" id="customOptionName" placeholder="Nom de l'option (ex: Taille, Dimension)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="customOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <input type="number" id="customOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="customOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
                     <div class="form-group">
                         <input type="number" name="stock" placeholder="Quantité en stock" required>
                         <input type="number" name="oldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
@@ -88,6 +99,9 @@
                             <span class="toolbar-separator"></span>
                             
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            <button type="button" onclick="window.unifyEditorText('productCareGuideEditor')" title="Unifier le style du texte" style="color: #4d5d30; font-weight: bold;">✨ Unifier</button>
                         </div>
                         <div id="productCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)"></div>
                     </div>
@@ -352,12 +366,12 @@
                     <input type="hidden" id="editProductId">
                     <div class="form-group">
                         <input type="text" name="name" id="editName" placeholder="Nom commun" required>
-                        <input type="text" name="latinName" id="editLatinName" placeholder="Nom latin" required>
+                        <input type="text" name="latinName" id="editLatinName" placeholder="Nom latin">
                     </div>
                     <div class="form-group">
-                        <select name="category" id="editCategory" required onchange="generatePriceInputs('editDynamicPricesContainer', this.value)">
+                        <select name="category" id="editCategory" required onchange="window.generatePriceInputs('editDynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'editBundleBuilder'); if(window.toggleCustomOptions) window.toggleCustomOptions(this, 'editCustomOptionsBuilder', 'editDynamicPricesContainer');">
                             </select>
-                        <select name="difficulty" id="editDifficulty" required>
+                        <select name="difficulty" id="editDifficulty">
                             <option value="debutant">Débutant</option>
                             <option value="intermediaire">Intermédiaire</option>
                             <option value="expert">Expert</option>
@@ -366,6 +380,17 @@
                     
                     <div id="editDynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
                     
+                    <div id="editCustomOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options personnalisées (ex: Dimensions, Contenances)</h4>
+                        <input type="text" id="editCustomOptionName" placeholder="Nom de l'option (ex: Taille, Dimension)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="editCustomOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <input type="number" id="editCustomOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="editCustomOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
                     <div class="form-group">
                         <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">
                         <input type="number" name="oldPrice" id="editOldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
@@ -396,6 +421,9 @@
                             <span class="toolbar-separator"></span>
                             
                             <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+
+                            <span class="toolbar-separator"></span>
+                            <button type="button" onclick="window.unifyEditorText('editCareGuideEditor')" title="Unifier le style du texte" style="color: #4d5d30; font-weight: bold;">✨ Unifier</button>
                         </div>
                         <div id="editCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire..."></div>
                     </div>
