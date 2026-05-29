@@ -20,10 +20,14 @@ window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
 
     if (type === 'materiels') {
         builder.style.display = 'block';
-        pricesContainer.style.display = 'none'; // On cache les prix par lots
+        pricesContainer.style.display = 'none'; 
+        // NOUVEAU : On retire le required des champs de prix normaux pour ne pas bloquer l'envoi
+        pricesContainer.querySelectorAll('input').forEach(input => input.required = false);
     } else {
         builder.style.display = 'none';
         pricesContainer.style.display = 'block';
+        // NOUVEAU : On remet le required si on repasse sur une catégorie classique
+        pricesContainer.querySelectorAll('input').forEach(input => input.required = true);
     }
 };
 
