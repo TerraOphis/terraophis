@@ -84,6 +84,16 @@
                         <ul id="customOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
 
+                    <div id="freeOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options supplémentaires gratuites (ex: Couleur, Forme)</h4>
+                        <input type="text" id="freeOptionName" placeholder="Nom de l'option (ex: Couleur)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="freeOptionValue" placeholder="Valeur (ex: Rouge, Bleu)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addFreeOption('freeOptionValue', 'freeOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="freeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
                     <div class="form-group">
                         <input type="number" name="stock" placeholder="Quantité en stock" required>
                         <input type="number" name="oldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
@@ -391,6 +401,16 @@
                         <ul id="editCustomOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
 
+                    <div id="editFreeOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options supplémentaires gratuites (ex: Couleur, Forme)</h4>
+                        <input type="text" id="editFreeOptionName" placeholder="Nom de l'option (ex: Couleur)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="editFreeOptionValue" placeholder="Valeur (ex: Rouge, Bleu)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addFreeOption('editFreeOptionValue', 'editFreeOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="editFreeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
                     <div class="form-group">
                         <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">
                         <input type="number" name="oldPrice" id="editOldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
@@ -508,6 +528,6 @@
 
 </main>
 
-    <script type="module" src="admin.js"></script>
+    <script type="module" src="admin.js?v=2"></script>
 </body>
 </html>

@@ -9,10 +9,16 @@ const statusMsg = document.getElementById('uploadStatus');
 
 // NOUVEAU: Logique globale pour les Options Personnalisées (Matériels)
 window.currentCustomOptions = { name: "", variants: [] };
+// NOUVEAU: Logique pour les Options Gratuites
+window.currentFreeOptions = { name: "", values: [] };
 
 window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
     const builder = document.getElementById(builderId);
     const pricesContainer = document.getElementById(pricesContainerId);
+    // On déduit l'ID du constructeur gratuit en fonction du contexte (Création ou Édition)
+    const freeBuilderId = builderId.replace('customOptionsBuilder', 'freeOptionsBuilder');
+    const freeBuilder = document.getElementById(freeBuilderId);
+    
     if(!builder || !pricesContainer) return;
     
     const selectedOption = selectElement.options[selectElement.selectedIndex];
@@ -20,13 +26,13 @@ window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
 
     if (type === 'materiels') {
         builder.style.display = 'block';
+        if (freeBuilder) freeBuilder.style.display = 'block';
         pricesContainer.style.display = 'none'; 
-        // NOUVEAU : On retire le required des champs de prix normaux pour ne pas bloquer l'envoi
         pricesContainer.querySelectorAll('input').forEach(input => input.required = false);
     } else {
         builder.style.display = 'none';
+        if (freeBuilder) freeBuilder.style.display = 'none';
         pricesContainer.style.display = 'block';
-        // NOUVEAU : On remet le required si on repasse sur une catégorie classique
         pricesContainer.querySelectorAll('input').forEach(input => input.required = true);
     }
 };
@@ -58,6 +64,31 @@ window.renderCustomOptions = (listId) => {
         <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
             <span><strong>${variant.label}</strong> : ${variant.price.toFixed(2)} €</span>
             <button type="button" onclick="window.removeCustomOption(${index}, '${listId}')" style="color: #a35d5d; border: none; background: none; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button>
+        </li>
+    `).join('');
+};
+
+// NOUVEAU : Fonctions de gestion pour les options gratuites
+window.addFreeOption = (valueId, listId) => {
+    const valueInput = document.getElementById(valueId);
+    if (!valueInput.value) return;
+
+    window.currentFreeOptions.values.push(valueInput.value.trim());
+    valueInput.value = '';
+    window.renderFreeOptions(listId);
+};
+
+window.removeFreeOption = (index, listId) => {
+    window.currentFreeOptions.values.splice(index, 1);
+    window.renderFreeOptions(listId);
+};
+
+window.renderFreeOptions = (listId) => {
+    const list = document.getElementById(listId);
+    list.innerHTML = window.currentFreeOptions.values.map((val, index) => `
+        <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
+            <span><strong>${val}</strong></span>
+            <button type="button" onclick="window.removeFreeOption(${index}, '${listId}')" style="color: #a35d5d; border: none; background: none; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button>
         </li>
     `).join('');
 };
@@ -178,15 +209,25 @@ productForm.addEventListener('submit', async (e) => {
             };
         }
 
+        // NOUVEAU : Sauvegarde des options gratuites si c'est du matériel
+        let freeOpts = null;
+        if (isMateriel && window.currentFreeOptions.values.length > 0) {
+            freeOpts = {
+                name: document.getElementById('freeOptionName').value || "Option supplémentaire",
+                values: window.currentFreeOptions.values
+            };
+        }
+
         const productData = {
             name: formData.get('name'),
-            latinName: formData.get('latinName') || null, // NOUVEAU : Désormais optionnel
+            latinName: formData.get('latinName') || null, 
             stock: formData.get('stock') ? parseInt(formData.get('stock')) : 0,
             oldPrice: formData.get('oldPrice') ? parseFloat(formData.get('oldPrice')) : null,
             category: formData.get('category'),
-            difficulty: formData.get('difficulty') || null, // NOUVEAU : Désormais optionnel
+            difficulty: formData.get('difficulty') || null, 
             bundleItems: window.currentBundleItems.length > 0 ? window.currentBundleItems : null,
-            customOptions: customOpts, // NOUVEAU : Injection des options
+            customOptions: customOpts, 
+            freeOptions: freeOpts, // NOUVEAU : Injection des options gratuites
             description: formData.get('description'),
             careGuide: careGuideHtml,
             prices: prices,
@@ -250,12 +291,23 @@ window.editProduct = async (id) => {
                 document.getElementById('editCustomOptionName').value = p.customOptions.name || "";
                 window.renderCustomOptions('editCustomOptionsList');
                 
-                // On s'assure d'afficher le builder et cacher les lots
                 document.getElementById('editCustomOptionsBuilder').style.display = 'block';
                 document.getElementById('editDynamicPricesContainer').style.display = 'none';
             } else {
                 document.getElementById('editCustomOptionsBuilder').style.display = 'none';
                 document.getElementById('editDynamicPricesContainer').style.display = 'block';
+            }
+            
+            // NOUVEAU : Restauration des options gratuites pour l'édition
+            window.currentFreeOptions = { name: "", values: [] };
+            const editFreeBuilder = document.getElementById('editFreeOptionsBuilder');
+            if (p.freeOptions && p.freeOptions.values) {
+                window.currentFreeOptions = p.freeOptions;
+                document.getElementById('editFreeOptionName').value = p.freeOptions.name || "";
+                window.renderFreeOptions('editFreeOptionsList');
+                if (editFreeBuilder) editFreeBuilder.style.display = 'block';
+            } else {
+                if (editFreeBuilder) editFreeBuilder.style.display = 'none';
             }
             
             renderEditPhotos(p.photos || [], id);
@@ -427,6 +479,15 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             };
         }
 
+        // NOUVEAU : Sauvegarde des options gratuites à l'édition
+        let freeOptsEdit = null;
+        if (isMaterielEdit && window.currentFreeOptions.values.length > 0) {
+            freeOptsEdit = {
+                name: document.getElementById('editFreeOptionName').value || "Option supplémentaire",
+                values: window.currentFreeOptions.values
+            };
+        }
+
         const editBundleBuilder = document.getElementById('editBundleBuilder');
         const isPack = editBundleBuilder && editBundleBuilder.style.display === 'block';
         const finalStock = isPack ? 0 : (formData.get('stock') ? parseInt(formData.get('stock')) : 0);
@@ -442,6 +503,7 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             careGuide: careGuideHtml,
             prices: prices, 
             customOptions: customOptsEdit, // NOUVEAU
+            freeOptions: freeOptsEdit,
             photos: finalPhotos
         });
 
@@ -602,12 +664,17 @@ async function loadOrders() {
                 for (const item of order.items) {
                     const prodSnap = await getDoc(doc(db, "products", item.id));
                     const prodName = prodSnap.exists() ? prodSnap.data().name : "Spécimen supprimé";
-                    const lotText = item.lotSize ? ` (Lot de ${item.lotSize})` : '';
-                    itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}${lotText}</li>`;
+                    
+                    // NOUVEAU : Gestion de l'affichage textuel propre selon s'il s'agit d'une dimension (string) ou d'un lot d'insectes (number)
+                    const lotText = item.lotSize ? (typeof item.lotSize === 'string' ? ` (Option : ${item.lotSize})` : ` (Lot de ${item.lotSize})`) : '';
+                    
+                    // NOUVEAU : Récupération et affichage de la variante gratuite choisie par le client
+                    const freeOptText = item.freeOption ? ` (+ ${item.freeOption})` : '';
+                    
+                    itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}${lotText}${freeOptText}</li>`;
                 }
             }
 
-            // NOUVEAU : Affichage structuré du mode de transport et des coordonnées
             const shippingBadge = order.shippingMethod === 'chrono18' ? '🚀 Chrono 18' : (order.shippingMethod === 'retrait' ? '📦 Retrait sur place' : '🚚 Colissimo');
             
             let addressHtml = `

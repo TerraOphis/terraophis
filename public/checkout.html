@@ -433,22 +433,41 @@
                 validCart.push(cart[i]);
 
                 const pSnap = await getDoc(doc(db, "products", cart[i].id));
-                const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
-                
-                const itemLot = cart[i].lotSize;
-                let itemPrice = pSnap.exists() ? pSnap.data().price : 0;
-                
-                if (pSnap.exists() && pSnap.data().prices && pSnap.data().prices[itemLot] !== undefined) {
-                    itemPrice = pSnap.data().prices[itemLot];
-                } else if (pSnap.exists()) {
-                    if (itemLot === 5) itemPrice = pSnap.data().price5;
-                    if (itemLot === 10) itemPrice = pSnap.data().price10;
-                }
+                    const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
+                    
+                    const itemLot = cart[i].lotSize;
+                    let itemPrice = 0;
+                    let lotText = '';
+                    
+                    if (pSnap.exists()) {
+                        const p = pSnap.data();
+                        
+                        // NOUVEAU : Récupération du prix si c'est une option matérielle texte
+                        if (p.customOptions && p.customOptions.variants && typeof itemLot === 'string') {
+                            const variant = p.customOptions.variants.find(v => v.label === itemLot);
+                            if (variant) itemPrice = variant.price;
+                            lotText = ` <span style="font-size: 0.9em; color: #888;">(Option : ${itemLot})</span>`;
+                        } else {
+                            // C'est un insecte normal en lot
+                            if (p.prices && p.prices[itemLot] !== undefined) {
+                                itemPrice = p.prices[itemLot];
+                            } else {
+                                itemPrice = itemLot === 1 ? p.price : (p[`price${itemLot}`] || p.price || 0);
+                            }
+                            if (itemLot && itemLot > 1) {
+                                lotText = ` <span style="font-size: 0.9em; color: #888;">(Lot de ${itemLot})</span>`;
+                            }
+                        }
+                        
+                        // NOUVEAU : Ajout de l'option gratuite au texte
+                        if (cart[i].freeOption) {
+                            lotText += ` <span style="font-size: 0.9em; color: #888;">(+ ${cart[i].freeOption})</span>`;
+                        }
+                    }
 
-                const itemTotal = itemPrice * cart[i].quantity;
-                const lotText = itemLot ? ` (Lot de ${itemLot})` : '';
+                    const itemTotal = itemPrice * cart[i].quantity;
 
-                let oldPriceHtml = '';
+                    let oldPriceHtml = '';
                 if (pSnap.exists() && pSnap.data().oldPrice) {
                     const oldItemTotal = (pSnap.data().oldPrice * cart[i].quantity).toFixed(2);
                     oldPriceHtml = `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 8px;">${oldItemTotal} €</span>`;

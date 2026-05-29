@@ -194,7 +194,7 @@ async function loadCatalogue() {
                         ${badgeHtml}
                         <img src="${photoUrl}" alt="${product.name}" class="product-image">
                         <div class="product-info">
-                            <p class="product-latin">${product.latinName}</p>
+                            <p class="product-latin">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
                             <h3 class="product-name">${product.name}</h3>
                             <p class="product-price">${oldPriceHtml}${basePrice} €${lotText}</p>
                         </div>
@@ -422,6 +422,19 @@ async function loadProductDetails() {
                 `;
             }
 
+            // NOUVEAU : Ajout du sélecteur d'options gratuites s'il y en a
+            let freeSelectorHtml = '';
+            if (product.freeOptions && product.freeOptions.values && product.freeOptions.values.length > 0) {
+                freeSelectorHtml = `
+                    <div class="lot-selector" style="margin-top: 15px;">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:5px;">${product.freeOptions.name}</label>
+                        <select id="freeOptionSelect">
+                            ${product.freeOptions.values.map(val => `<option value="${val}">${val}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+
             detailsContainer.innerHTML = `
                 <div class="product-page-layout">
                     <div class="product-left">
@@ -442,6 +455,7 @@ async function loadProductDetails() {
                         <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${defaultPrice} €</span></p>
                         
                         ${lotSelectorHtml}
+                        ${freeSelectorHtml}
 
                         <button class="btn-buy" onclick="addSelectedToCart('${docSnap.id}')" style="width: 100%; padding: 18px; font-size: 1.1rem; margin-bottom: 10px;" ${!canBuySomething ? 'disabled' : ''}>
                             ${canBuySomething ? 'Ajouter au panier' : 'RUPTURE DE STOCK'}
@@ -476,13 +490,17 @@ window.updateDisplayPrice = () => {
 
 window.addSelectedToCart = (id) => {
     const select = document.getElementById('lotSelect');
-    // NOUVEAU : Si la valeur est du texte (ex: "10cm"), on la garde en string, sinon on parse l'entier.
     let lotSize = null;
     if (select) {
         const val = select.value;
         lotSize = /^\d+$/.test(val) ? parseInt(val) : val;
     }
-    addToCart(id, lotSize);
+    
+    // NOUVEAU : Récupération de l'option gratuite sélectionnée
+    const freeSelect = document.getElementById('freeOptionSelect');
+    const freeOption = freeSelect ? freeSelect.value : null;
+    
+    addToCart(id, lotSize, freeOption);
 };
 
 // NOUVEAU : Fonction de validation globale du stock croisé
@@ -538,9 +556,14 @@ async function validateCartStock(simulatedCart) {
 }
 
 // NOUVEAU : Logique du panier avec gestion du Stock Croisé
-window.addToCart = async (productId, lotSize = null) => {
+// NOUVEAU : Logique du panier avec gestion du Stock Croisé et options gratuites
+window.addToCart = async (productId, lotSize = null, freeOption = null) => {
     let cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-    const cartId = lotSize ? `${productId}_${lotSize}` : productId;
+    
+    // NOUVEAU : On intègre l'option gratuite dans l'ID du panier pour bien séparer les variantes
+    let cartId = productId;
+    if (lotSize) cartId += `_${lotSize}`;
+    if (freeOption) cartId += `_${freeOption.replace(/\s+/g, '-')}`;
 
     // 1. On simule le panier AVEC le nouvel ajout
     let simulatedCart = JSON.parse(JSON.stringify(cart));
@@ -549,7 +572,7 @@ window.addToCart = async (productId, lotSize = null) => {
     if (existingItem) {
         existingItem.quantity += 1;
     } else {
-        simulatedCart.push({ id: productId, cartId: cartId, lotSize: lotSize, quantity: 1 });
+        simulatedCart.push({ id: productId, cartId: cartId, lotSize: lotSize, freeOption: freeOption, quantity: 1 });
     }
 
     // 2. On vérifie si ce panier simulé est mathématiquement possible avec les stocks réels
@@ -685,6 +708,7 @@ window.renderCart = async () => {
                 } else if (itemLot && itemLot > 1) {
                     lotText = `<br><span style="font-size:0.75rem; color:#888;">Lot de ${itemLot}</span>`;
                 }
+                const freeOptText = cart[i].freeOption ? `<br><span style="font-size:0.75rem; color:#888;">${cart[i].freeOption}</span>` : '';
 
                 const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${p.oldPrice} €</span>` : '';
 
