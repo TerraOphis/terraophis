@@ -165,10 +165,12 @@ async function loadCatalogue() {
                     else if (product.price10) minLotSize = 10;
                 }
 
-                // Formatage textuel unifié (même taille et police partout)
-                const lotText = displayLot === 1 
-                    ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(l'unité)</span>` 
-                    : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
+                // NOUVEAU : On assigne simplement la valeur sans "const" puisqu'elle a déjà été déclarée en haut
+                if (!lotText) {
+                    lotText = displayLot === 1 
+                        ? ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(l'unité)</span>` 
+                        : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
+                }
                 
                 const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.9rem; margin-right: 8px; font-weight: normal;">${product.oldPrice} €</span>` : '';
 
