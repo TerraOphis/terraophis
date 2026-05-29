@@ -187,7 +187,7 @@ async function loadCatalogue() {
                 const isLowStock = !isActuallyOutOfStock && product.stock <= 10;
                 const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
 
-                const card = document.createElement('div');
+               const card = document.createElement('div');
                 card.className = 'product-card';
                 card.innerHTML = `
                     <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
