@@ -187,7 +187,7 @@ async function loadCatalogue() {
                 const isLowStock = !isActuallyOutOfStock && product.stock <= 10;
                 const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
 
-                const card = document.createElement('div');
+               const card = document.createElement('div');
                 card.className = 'product-card';
                 card.innerHTML = `
                     <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
@@ -451,7 +451,7 @@ async function loadProductDetails() {
                     
                     <div class="product-right">
                         <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
-                        <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName}</p>
+                        <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
                         <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${defaultPrice} €</span></p>
                         
                         ${lotSelectorHtml}
