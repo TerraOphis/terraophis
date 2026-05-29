@@ -1110,7 +1110,6 @@ footer {
     color: var(--accent-brown);
     margin-top: 0;
     font-size: 1.4rem;
-    padding-bottom: 15px;
     border-bottom: 1px solid var(--border-light);
     margin-bottom: 20px;
 }
@@ -1130,6 +1129,7 @@ footer {
     margin-bottom: 10px;
     border-bottom: 1px dotted var(--border-light);
     padding-bottom: 5px;
+    margin:0
 }
 
 .care-guide-content h3 {
