@@ -451,7 +451,7 @@ async function loadProductDetails() {
                     
                     <div class="product-right">
                         <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
-                        <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName}</p>
+                        <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
                         <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${defaultPrice} €</span></p>
                         
                         ${lotSelectorHtml}
@@ -1098,15 +1098,16 @@ async function loadGuidesList() {
             const cover = g.imageUrl || 'assets/img/placeholder.jpg';
             
             const card = document.createElement('div');
-            card.className = 'guide-card';
-            card.innerHTML = `
-                <a href="/guide.html?id=${docSnap.id}" style="text-decoration: none; color: inherit;">
-                    <img src="${cover}" alt="${g.title}" class="guide-image">
-                    <div class="guide-info">
-                        <h3>${g.title}</h3>
-                        <p>${excerpt}</p>
-                        <span class="read-more">Lire la suite →</span>
-                    </div>
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
+                        ${badgeHtml}
+                        <img src="${photoUrl}" alt="${product.name}" class="product-image">
+                        <div class="product-info">
+                            <p class="product-latin">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
+                            <h3 class="product-name">${product.name}</h3>
+                            <p class="product-price">${oldPriceHtml}${basePrice} €${lotText}</p>
+                        </div>
                 </a>
             `;
             grid.appendChild(card);
