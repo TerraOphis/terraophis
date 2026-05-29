@@ -1375,24 +1375,28 @@ window.generatePriceInputs = async (containerId, categoryId, existingPrices = nu
     const catData = catSnap.data();
     let lots = catData.lots;
     
-    // NOUVEAU : Sécurité anti-bug. Si la catégorie n'a pas de lots (ou tableau vide), on force un lot de 1.
+    // Sécurité anti-bug. Si la catégorie n'a pas de lots (ou tableau vide), on force un lot de 1.
     if (!lots || lots.length === 0) {
         lots = [1];
     }
 
     const isPack = catData.type === 'packs';
+    // NOUVEAU : On vérifie immédiatement si c'est du matériel
+    const isMateriel = catData.type === 'materiels'; 
 
     container.innerHTML = lots.map(lot => {
         const value = existingPrices && existingPrices[lot] !== undefined ? existingPrices[lot] : '';
         
-        // NOUVEAU : Changement dynamique du titre et de la couleur si c'est un pack
         const labelText = isPack && lot === 1 ? "Prix de vente du Kit / Pack (€)" : `Prix Lot de ${lot} (€)`;
         const labelColor = isPack ? "#4d5d30" : "var(--accent-brown)";
+        
+        // NOUVEAU : On applique l'attribut required UNIQUEMENT si ce n'est pas du matériel
+        const requiredAttr = isMateriel ? '' : 'required';
 
         return `
             <div style="flex: 1; min-width: 120px;">
                 <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:5px; color: ${labelColor};">${labelText}</label>
-                <input type="number" class="lot-price-input" data-lot="${lot}" placeholder="Ex: 29.90" step="0.01" value="${value}" required>
+                <input type="number" class="lot-price-input" data-lot="${lot}" placeholder="Ex: 29.90" step="0.01" value="${value}" ${requiredAttr}>
             </div>
         `;
     }).join('');
