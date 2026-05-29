@@ -1121,6 +1121,40 @@ footer {
     color: #666;
 }
 
+/* NOUVEAU : Réduction et contrôle des marges générées par l'éditeur de texte */
+.care-guide-content h2 {
+    font-family: 'Playfair Display', serif;
+    color: var(--accent-brown);
+    font-size: 1.3rem;
+    margin-top: 25px;
+    margin-bottom: 10px;
+    border-bottom: 1px dotted var(--border-light);
+    padding-bottom: 5px;
+}
+
+.care-guide-content h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--accent-brown);
+    font-size: 1.1rem;
+    margin-top: 20px;
+    margin-bottom: 8px;
+}
+
+.care-guide-content p {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.care-guide-content ul {
+    margin-top: 5px;
+    margin-bottom: 15px;
+    padding-left: 20px;
+}
+
+.care-guide-content li {
+    margin-bottom: 5px;
+}
+
 #productDetails {
     width: 100% !important;
     max-width: 100% !important;
