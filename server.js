@@ -410,7 +410,18 @@ app.post('/api/free-order', async (req, res) => {
 app.use(cors()); 
 app.use(express.json()); // <--- Le Webhook doit impérativement être au dessus de cette ligne
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+
+// NOUVEAU : Fusion de la gestion des extensions HTML et de l'anti-cache
+app.use(express.static(path.join(__dirname, 'public'), { 
+    extensions: ['html'],
+    setHeaders: function (res, path) {
+        if (path.endsWith('.css') || path.endsWith('.js') || path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 app.get('/produit', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'produit.html'));
