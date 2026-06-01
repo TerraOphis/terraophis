@@ -7,41 +7,87 @@ const statusMsg = document.getElementById('uploadStatus');
 
 // --- SÉCURITÉ & AUTHENTIFICATION ---
 
-// NOUVEAU: Logique globale pour les Options Personnalisées (Matériels)
+// NOUVEAU: Logique globale pour les Options Personnalisées et Gratuites combinées
 window.currentCustomOptions = { name: "", variants: [] };
-// NOUVEAU: Logique pour les Options Gratuites
 window.currentFreeOptions = { name: "", values: [] };
+window.currentVariantStocks = {}; // Stockage temporaire de la matrice de stock courante
 
-window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
-    const builder = document.getElementById(builderId);
-    const pricesContainer = document.getElementById(pricesContainerId);
-    // On déduit l'ID du constructeur gratuit en fonction du contexte (Création ou Édition)
-    const freeBuilderId = builderId.replace('customOptionsBuilder', 'freeOptionsBuilder');
-    const freeBuilder = document.getElementById(freeBuilderId);
-    
-    if(!builder || !pricesContainer) return;
-    
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
-    const type = selectedOption.getAttribute('data-type');
+// NOUVEAU : Capture en temps réel de ce qui est écrit dans les inputs générés de la matrice
+window.saveCurrentMatrixInputs = (isEdit = false) => {
+    const selector = isEdit ? '.edit-matrix-stock-input' : '.matrix-stock-input';
+    document.querySelectorAll(selector).forEach(input => {
+        window.currentVariantStocks[input.dataset.comb] = input.value !== "" ? parseInt(input.value) : "";
+    });
+};
 
-    if (type === 'materiels') {
-        builder.style.display = 'block';
-        if (freeBuilder) freeBuilder.style.display = 'block';
-        pricesContainer.style.display = 'none'; 
-        pricesContainer.querySelectorAll('input').forEach(input => input.required = false);
-    } else {
-        builder.style.display = 'none';
-        if (freeBuilder) freeBuilder.style.display = 'none';
-        pricesContainer.style.display = 'block';
-        pricesContainer.querySelectorAll('input').forEach(input => input.required = true);
+// NOUVEAU : Générateur visuel de la matrice de stock croisée (Option Custom x Option Gratuite)
+window.renderStockMatrix = (containerId, isEdit = false) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const variants = window.currentCustomOptions.variants || [];
+    const freeValues = window.currentFreeOptions.values || [];
+
+    if (variants.length === 0) {
+        container.innerHTML = '';
+        return;
     }
+
+    let html = `
+        <div style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+            <h4 style="margin-top: 0; margin-bottom: 12px; font-family: 'Playfair Display', serif; color: var(--accent-brown);">Grille des stocks détaillés</h4>
+    `;
+
+    // Cas A : Il y a des options gratuites renseignées -> On croise les dimensions et les couleurs
+    if (freeValues.length > 0) {
+        html += '<div style="display:flex; flex-direction:column; gap:12px;">';
+        freeValues.forEach(freeVal => {
+            html += `
+                <div style="background: #fff; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <strong style="color: #4d5d30; display: block; margin-bottom: 8px; font-size: 0.85rem; text-transform: uppercase;">Déclinaison : ${freeVal}</strong>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px;">
+            `;
+            variants.forEach(v => {
+                const combKey = `${v.label}_${freeVal}`;
+                const currentVal = window.currentVariantStocks[combKey] !== undefined ? window.currentVariantStocks[combKey] : "";
+                html += `
+                    <div>
+                        <label style="font-size: 0.75rem; display: block; margin-bottom: 3px; color: #666;">${v.label}</label>
+                        <input type="number" class="${isEdit ? 'edit-' : ''}matrix-stock-input" data-comb="${combKey}" placeholder="Stock" value="${currentVal}" style="padding: 6px; font-size: 0.85rem;">
+                    </div>
+                `;
+            });
+            html += `</div></div>`;
+        });
+        html += '</div>';
+    } 
+    // Cas B : Uniquement des options Custom (ex: Dimensions simples, pas de free options)
+    else {
+        html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">';
+        variants.forEach(v => {
+            const combKey = v.label;
+            const currentVal = window.currentVariantStocks[combKey] !== undefined ? window.currentVariantStocks[combKey] : "";
+            html += `
+                <div style="background: #fff; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 5px; color: var(--accent-brown);">${v.label}</label>
+                    <input type="number" class="${isEdit ? 'edit-' : ''}matrix-stock-input" data-comb="${combKey}" placeholder="Stock" value="${currentVal}" style="padding: 6px; font-size: 0.85rem;">
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
 };
 
 window.addCustomOption = (valueId, priceId, listId) => {
     const valueInput = document.getElementById(valueId);
     const priceInput = document.getElementById(priceId);
-    
-    if (!valueInput.value || !priceInput.value) return;
+    if (!valueInput || !priceInput || !valueInput.value || !priceInput.value) return;
+
+    const isEdit = valueId.startsWith('edit');
+    window.saveCurrentMatrixInputs(isEdit);
 
     window.currentCustomOptions.variants.push({
         label: valueInput.value.trim(),
@@ -51,15 +97,21 @@ window.addCustomOption = (valueId, priceId, listId) => {
     valueInput.value = '';
     priceInput.value = '';
     window.renderCustomOptions(listId);
+    window.renderStockMatrix(isEdit ? 'editMatrixStockContainer' : 'matrixStockContainer', isEdit);
 };
 
 window.removeCustomOption = (index, listId) => {
+    const isEdit = listId.startsWith('edit');
+    window.saveCurrentMatrixInputs(isEdit);
+
     window.currentCustomOptions.variants.splice(index, 1);
     window.renderCustomOptions(listId);
+    window.renderStockMatrix(isEdit ? 'editMatrixStockContainer' : 'matrixStockContainer', isEdit);
 };
 
 window.renderCustomOptions = (listId) => {
     const list = document.getElementById(listId);
+    if (!list) return;
     list.innerHTML = window.currentCustomOptions.variants.map((variant, index) => `
         <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
             <span><strong>${variant.label}</strong> : ${variant.price.toFixed(2)} €</span>
@@ -68,29 +120,81 @@ window.renderCustomOptions = (listId) => {
     `).join('');
 };
 
-// NOUVEAU : Fonctions de gestion pour les options gratuites
 window.addFreeOption = (valueId, listId) => {
     const valueInput = document.getElementById(valueId);
-    if (!valueInput.value) return;
+    if (!valueInput || !valueInput.value) return;
+
+    const isEdit = valueId.startsWith('edit');
+    window.saveCurrentMatrixInputs(isEdit);
 
     window.currentFreeOptions.values.push(valueInput.value.trim());
     valueInput.value = '';
     window.renderFreeOptions(listId);
+    window.renderStockMatrix(isEdit ? 'editMatrixStockContainer' : 'matrixStockContainer', isEdit);
 };
 
 window.removeFreeOption = (index, listId) => {
+    const isEdit = listId.startsWith('edit');
+    window.saveCurrentMatrixInputs(isEdit);
+
     window.currentFreeOptions.values.splice(index, 1);
     window.renderFreeOptions(listId);
+    window.renderStockMatrix(isEdit ? 'editMatrixStockContainer' : 'matrixStockContainer', isEdit);
 };
 
 window.renderFreeOptions = (listId) => {
     const list = document.getElementById(listId);
+    if (!list) return;
     list.innerHTML = window.currentFreeOptions.values.map((val, index) => `
         <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
             <span><strong>${val}</strong></span>
             <button type="button" onclick="window.removeFreeOption(${index}, '${listId}')" style="color: #a35d5d; border: none; background: none; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button>
         </li>
     `).join('');
+};
+
+
+window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
+    const builder = document.getElementById(builderId);
+    const pricesContainer = document.getElementById(pricesContainerId);
+    const freeBuilderId = builderId.replace('customOptionsBuilder', 'freeOptionsBuilder');
+    const freeBuilder = document.getElementById(freeBuilderId);
+    
+    if (!builder || !pricesContainer) return;
+    
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const isEdit = builderId.includes('edit');
+    
+    // NOUVEAU : Ciblage dynamique du champ stock selon le contexte (Création vs Édition)
+    const stockInput = isEdit 
+        ? document.getElementById('editStock') 
+        : document.querySelector('#productForm input[name="stock"]');
+
+    // On récupère le type de catégorie à partir de l'option sélectionnée
+    const type = selectedOption.getAttribute('data-type') || '';
+
+    if (type === 'materiels') {
+        builder.style.display = 'block';
+        pricesContainer.style.display = 'none';
+        if (freeBuilder) freeBuilder.style.display = 'block';
+        
+        // NOUVEAU : Rendre le stock global invisible et non obligatoire car la grille prend le relais
+        if (stockInput) {
+            stockInput.style.display = 'none';
+            stockInput.required = false;
+            stockInput.value = '';
+        }
+    } else {
+        builder.style.display = 'none';
+        pricesContainer.style.display = 'block';
+        if (freeBuilder) freeBuilder.style.display = 'none';
+        
+        // NOUVEAU : Réafficher et réimposer le stock global pour les articles classiques (ex: Animaux)
+        if (stockInput) {
+            stockInput.style.display = 'inline-block';
+            stockInput.required = true;
+        }
+    }
 };
 
 // NOUVEAU: Fonction radicale pour unifier et nettoyer le texte d'un éditeur
@@ -218,6 +322,13 @@ productForm.addEventListener('submit', async (e) => {
             };
         }
 
+        // NOUVEAU : Récupération et nettoyage des valeurs de la grille de stock croisée
+        window.saveCurrentMatrixInputs(false);
+        const cleanVariantStocks = {};
+        for (const [key, val] of Object.entries(window.currentVariantStocks)) {
+            if (val !== "") cleanVariantStocks[key] = parseInt(val);
+        }
+
         const productData = {
             name: formData.get('name'),
             latinName: formData.get('latinName') || null, 
@@ -227,7 +338,8 @@ productForm.addEventListener('submit', async (e) => {
             difficulty: formData.get('difficulty') || null, 
             bundleItems: window.currentBundleItems.length > 0 ? window.currentBundleItems : null,
             customOptions: customOpts, 
-            freeOptions: freeOpts, // NOUVEAU : Injection des options gratuites
+            freeOptions: freeOpts, 
+            variantStocks: cleanVariantStocks, // NOUVEAU : Injection en BDD
             description: formData.get('description'),
             careGuide: careGuideHtml,
             prices: prices,
@@ -257,34 +369,22 @@ window.editProduct = async (id) => {
         if (docSnap.exists()) {
             const p = docSnap.data();
             
-            // Assignation sécurisée des valeurs textuelles et sélecteurs
             if (document.getElementById('editProductId')) document.getElementById('editProductId').value = id;
             if (document.getElementById('editName')) document.getElementById('editName').value = p.name || '';
             if (document.getElementById('editLatinName')) document.getElementById('editLatinName').value = p.latinName || '';
+            
             const editStockInput = document.getElementById('editStock');
-            if (editStockInput) {
-                if (p.bundleItems && p.bundleItems.length > 0) {
-                    editStockInput.style.display = 'none';
-                    editStockInput.required = false;
-                } else {
-                    editStockInput.style.display = 'inline-block';
-                    editStockInput.required = true;
-                    editStockInput.value = p.stock || 0;
-                }
-            }
-            if (document.getElementById('editStock')) document.getElementById('editStock').value = p.stock || '';
+            
             if (document.getElementById('editOldPrice')) document.getElementById('editOldPrice').value = p.oldPrice || '';
             if (document.getElementById('editCategory')) document.getElementById('editCategory').value = p.category || '';
             if (document.getElementById('editDifficulty')) document.getElementById('editDifficulty').value = p.difficulty || '';
             if (document.getElementById('editDescription')) document.getElementById('editDescription').value = p.description || '';
             if (document.getElementById('editCareGuideEditor')) document.getElementById('editCareGuideEditor').innerHTML = p.careGuide || '';
             
-            // Génération des inputs de lots spécifiques à la catégorie du produit chargé
             await generatePriceInputs('editDynamicPricesContainer', p.category, p.prices || {
                 "1": p.price, "3": p.price3, "5": p.price5, "10": p.price10
             });
 
-            // NOUVEAU : Restauration des options custom pour l'édition
             window.currentCustomOptions = { name: "", variants: [] };
             if (p.customOptions && p.customOptions.variants) {
                 window.currentCustomOptions = p.customOptions;
@@ -293,12 +393,30 @@ window.editProduct = async (id) => {
                 
                 document.getElementById('editCustomOptionsBuilder').style.display = 'block';
                 document.getElementById('editDynamicPricesContainer').style.display = 'none';
+                
+                // NOUVEAU : Masquage et désactivation stricte du champ editStock si options présentes
+                if (editStockInput) {
+                    editStockInput.style.display = 'none';
+                    editStockInput.required = false;
+                    editStockInput.value = '';
+                }
             } else {
                 document.getElementById('editCustomOptionsBuilder').style.display = 'none';
                 document.getElementById('editDynamicPricesContainer').style.display = 'block';
+                
+                // NOUVEAU : Gestion de l'affichage du stock pour les produits simples ou packs
+                if (editStockInput) {
+                    if (p.bundleItems && p.bundleItems.length > 0) {
+                        editStockInput.style.display = 'none';
+                        editStockInput.required = false;
+                    } else {
+                        editStockInput.style.display = 'inline-block';
+                        editStockInput.required = true;
+                        editStockInput.value = p.stock || 0;
+                    }
+                }
             }
             
-            // NOUVEAU : Restauration des options gratuites pour l'édition
             window.currentFreeOptions = { name: "", values: [] };
             const editFreeBuilder = document.getElementById('editFreeOptionsBuilder');
             if (p.freeOptions && p.freeOptions.values) {
@@ -310,6 +428,9 @@ window.editProduct = async (id) => {
                 if (editFreeBuilder) editFreeBuilder.style.display = 'none';
             }
             
+            window.currentVariantStocks = p.variantStocks || {};
+            window.renderStockMatrix('editMatrixStockContainer', true);
+
             renderEditPhotos(p.photos || [], id);
             document.getElementById('editProductModal').style.display = 'flex';
         }
@@ -322,9 +443,15 @@ window.editProduct = async (id) => {
 window.closeEditModal = () => {
     document.getElementById('editProductModal').style.display = 'none';
     document.getElementById('editProductForm').reset();
-    // Nouveau : Remise à zéro propre de l'éditeur de texte enrichi
     document.getElementById('editCareGuideEditor').innerHTML = ''; 
     document.getElementById('editUploadStatus').textContent = '';
+    
+    // NOUVEAU : Réinitialisation propre de tous les états de la matrice à la fermeture
+    window.currentCustomOptions = { name: "", variants: [] };
+    window.currentFreeOptions = { name: "", values: [] };
+    window.currentVariantStocks = {};
+    if (document.getElementById('matrixStockContainer')) document.getElementById('matrixStockContainer').innerHTML = '';
+    if (document.getElementById('editMatrixStockContainer')) document.getElementById('editMatrixStockContainer').innerHTML = '';
 };
 
 // NOUVEAU : Gère l'affichage dynamique des photos existantes avec visibilité masquée aux extrémités
@@ -488,6 +615,13 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             };
         }
 
+        // NOUVEAU : Sauvegarde de la matrice modifiée
+        window.saveCurrentMatrixInputs(true);
+        const cleanVariantStocksEdit = {};
+        for (const [key, val] of Object.entries(window.currentVariantStocks)) {
+            if (val !== "") cleanVariantStocksEdit[key] = parseInt(val);
+        }
+
         const editBundleBuilder = document.getElementById('editBundleBuilder');
         const isPack = editBundleBuilder && editBundleBuilder.style.display === 'block';
         const finalStock = isPack ? 0 : (formData.get('stock') ? parseInt(formData.get('stock')) : 0);
@@ -502,8 +636,9 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             description: formData.get('description'),
             careGuide: careGuideHtml,
             prices: prices, 
-            customOptions: customOptsEdit, // NOUVEAU
+            customOptions: customOptsEdit, 
             freeOptions: freeOptsEdit,
+            variantStocks: cleanVariantStocksEdit, // NOUVEAU : Enregistrement de la matrice mise à jour
             photos: finalPhotos
         });
 
@@ -519,7 +654,6 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
     }
 });
 
-// 3. Charger l'inventaire pour pouvoir supprimer/gérer
 async function loadInventory() {
     const container = document.getElementById('adminInventory');
     container.innerHTML = '<p>Chargement des stocks...</p>';
@@ -527,10 +661,8 @@ async function loadInventory() {
     const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
     
-    // NOUVEAU : On stocke tous les produits pour calculer les stocks virtuels des packs
     const allProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // Calcul du stock virtuel pour l'affichage admin
     allProducts.forEach(p => {
         if (p.bundleItems && p.bundleItems.length > 0) {
             let virtualStock = Infinity;
@@ -553,15 +685,25 @@ async function loadInventory() {
         const div = document.createElement('div');
         div.className = 'inventory-item';
         
+        // NOUVEAU : Calcul dynamique du stock global si le produit utilise une matrice
+        let displayStock = p.stock || 0;
+        let isMatrix = false;
+        
+        if (p.variantStocks && Object.keys(p.variantStocks).length > 0) {
+            displayStock = Object.values(p.variantStocks).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+            isMatrix = true;
+        }
+
         let stockClass = "stock-out";
         let stockText = p.isPack ? "Rupture (Composants)" : "Rupture";
         
-        if (p.stock > 10) {
+        // NOUVEAU : Utilisation du displayStock calculé
+        if (displayStock > 10) {
             stockClass = "stock-high";
-            stockText = p.isPack ? `${p.stock} packs possibles` : `${p.stock} en stock`;
-        } else if (p.stock > 0) {
+            stockText = p.isPack ? `${displayStock} packs possibles` : (isMatrix ? `${displayStock} en stock (Options)` : `${displayStock} en stock`);
+        } else if (displayStock > 0) {
             stockClass = "stock-low";
-            stockText = p.isPack ? `Max ${p.stock} packs` : `Reste ${p.stock}`;
+            stockText = p.isPack ? `Max ${displayStock} packs` : (isMatrix ? `Reste ${displayStock} (Options)` : `Reste ${displayStock}`);
         }
         
         let priceContent = '';

@@ -1,6 +1,6 @@
 import { db, auth } from './firebase-config.js';
 import { collection, query, getDocs, orderBy, doc, getDoc, addDoc, setDoc, updateDoc, increment, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, getAdditionalUserInfo } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 let allProducts = []; // Stockage local pour filtrer sans requêter Firebase en boucle
 
@@ -11,12 +11,16 @@ window.updateNavAuthUI = (user) => {
     if (!authBtn) return; 
 
     if (user) {
-        // NOUVEAU : Si connecté, on met l'icône profil (verte) vers la page profil
+        // NOUVEAU : Ajout du nom du client et flexbox pour aligner le texte et l'icône
+        const displayName = user.displayName ? user.displayName : 'Profil';
         authBtn.href = '/profil';
-        authBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#586d32" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+        authBtn.style.display = 'flex';
+        authBtn.style.alignItems = 'center';
+        authBtn.style.gap = '8px';
+        authBtn.innerHTML = `<span>${displayName}</span> <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#586d32" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
     } else {
-        // NOUVEAU : Si déconnecté, on remet le texte Connexion
         authBtn.href = '/connexion';
+        authBtn.style.display = 'block';
         authBtn.innerHTML = `Connexion`;
     }
 };
@@ -30,15 +34,34 @@ window.loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
         const result = await signInWithPopup(auth, provider);
+        // NOUVEAU : Vérification du type de connexion (nouveau compte ou habitué)
+        const userInfo = getAdditionalUserInfo(result); 
         
-        // Sauvegarde ou mise à jour automatique des infos de base dans Firestore
         await setDoc(doc(db, "users", result.user.uid), {
             name: result.user.displayName,
             email: result.user.email,
             updatedAt: serverTimestamp()
         }, { merge: true });
         
-        alert(`Ravi de vous revoir, ${result.user.displayName} ! 🌿`);
+        // NOUVEAU : Si c'est une création de compte, on déclenche l'envoi de l'e-mail
+        if (userInfo && userInfo.isNewUser) {
+            try {
+                await fetch('/api/send-welcome-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: result.user.email, 
+                        name: result.user.displayName 
+                    })
+                });
+            } catch (emailError) {
+                console.error("Erreur d'envoi de l'e-mail de bienvenue :", emailError);
+            }
+            alert(`Bienvenue parmi nous, ${result.user.displayName} ! 🌿`);
+        } else {
+            alert(`Ravi de vous revoir, ${result.user.displayName} ! 🌿`);
+        }
+        
         window.location.reload();
     } catch (error) {
         console.error("Erreur d'authentification Google :", error);
@@ -77,7 +100,8 @@ async function loadCatalogue() {
         categoryFilter.value = initialCat;
     }
 
-    productGrid.innerHTML = '<p style="text-align:center; grid-column: 1/-1;">Préparation du vivarium... 🌿</p>';
+    // NOUVEAU : Animation de chargement élégante (pulsation gérée en CSS)
+    productGrid.innerHTML = '<div style="text-align:center; grid-column: 1/-1; padding: 40px; font-family: \'Playfair Display\', serif; font-size: 1.2rem; color: #4a4238; animation: pulse 1.5s infinite alternate;">✨ Préparation du vivarium... 🌿</div>';
 
     try {
         const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
@@ -109,6 +133,7 @@ async function loadCatalogue() {
             }
         });
 
+        // NOUVEAU : Ajout de l'index dans le forEach pour gérer le délai d'animation
         const renderProducts = (productsToDisplay) => {
             productGrid.innerHTML = ''; 
             if (productsToDisplay.length === 0) {
@@ -116,7 +141,7 @@ async function loadCatalogue() {
                 return;
             }
 
-            productsToDisplay.forEach((product) => {
+            productsToDisplay.forEach((product, index) => {
                 const photoUrl = product.photos && product.photos.length > 0 ? product.photos[0] : 'assets/img/placeholder.jpg';
                 
                 let minLotSize = 1;
@@ -172,9 +197,32 @@ async function loadCatalogue() {
                         : ` <span style="font-size: 0.8rem; color: #888; font-weight: normal;">(le lot de ${displayLot})</span>`;
                 }
                 
-                const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.9rem; margin-right: 8px; font-weight: normal;">${product.oldPrice} €</span>` : '';
+                // NOUVEAU : Calcul cumulé du stock de la matrice et détection des alertes variantes faibles
+                let totalStock = product.stock;
+                let hasLowStockVariant = false;
+                if (product.variantStocks && Object.keys(product.variantStocks).length > 0) {
+                    totalStock = Object.values(product.variantStocks).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+                    hasLowStockVariant = Object.values(product.variantStocks).some(val => {
+                        const s = parseInt(val) || 0;
+                        return s > 0 && s <= 2; // Seuil d'alerte si une variante repère entre 1 et 2 articles restants
+                    });
+                }
 
-                const isActuallyOutOfStock = product.stock < minLotSize;
+                const formattedBasePrice = Number(basePrice).toFixed(2);
+                const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.9rem; margin-right: 8px; font-weight: normal;">${Number(product.oldPrice).toFixed(2)} €</span>` : '';
+
+                const isActuallyOutOfStock = product.variantStocks && Object.keys(product.variantStocks).length > 0
+                    ? totalStock < 1
+                    : product.stock < minLotSize;
+
+                let badgeHtml = '';
+                if (isActuallyOutOfStock) {
+                    badgeHtml = `<span class="product-badge out-of-stock" style="position:absolute; top:10px; left:10px; background:#a35d5d; color:white; padding:5px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold; z-index:2;">Épuisé</span>`;
+                } else if (hasLowStockVariant) {
+                    badgeHtml = `<span class="product-badge low-stock" style="position:absolute; top:10px; left:10px; background:#e67e22; color:white; padding:5px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold; z-index:2;">⚠️ Stock limité</span>`;
+                } else if (product.oldPrice) {
+                    badgeHtml = `<span class="product-badge sale" style="position:absolute; top:10px; left:10px; background:#6d8c6d; color:white; padding:5px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold; z-index:2;">PROMO</span>`;
+                }
                 
                 // NOUVEAU : Vérifie si le produit a des options custom pour afficher le bon bouton
                 const hasCustomOptions = product.customOptions && product.customOptions.variants && product.customOptions.variants.length > 0;
@@ -184,11 +232,13 @@ async function loadCatalogue() {
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
                 
                 // Le badge "Bientôt épuisé" ne s'affiche que si on a moins de 10 MAIS assez pour acheter au moins un lot
-                const isLowStock = !isActuallyOutOfStock && product.stock <= 10;
-                const badgeHtml = isLowStock ? '<span class="low-stock-badge">Bientôt épuisé</span>' : '';
+                const isLowStock = !isActuallyOutOfStock && product.stock <= 6;
 
                const card = document.createElement('div');
                 card.className = 'product-card';
+                // NOUVEAU : Animation d'apparition en cascade avec délai calculé sur l'index
+                card.style.opacity = '0';
+                card.style.animation = `fadeInProduct 0.5s ease forwards ${index * 0.05}s`;
                 card.innerHTML = `
                     <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
                         ${badgeHtml}
@@ -196,7 +246,7 @@ async function loadCatalogue() {
                         <div class="product-info">
                             <p class="product-latin">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
                             <h3 class="product-name">${product.name}</h3>
-                            <p class="product-price">${oldPriceHtml}${basePrice} €${lotText}</p>
+                            <p class="product-price">${oldPriceHtml}${formattedBasePrice} €${lotText}</p>
                         </div>
                     </a>
                     <button class="btn-buy" onclick="${btnAction}" ${isActuallyOutOfStock ? 'disabled' : ''} style="${isActuallyOutOfStock ? 'background-color: #ccc; cursor: not-allowed;' : ''}; width: 100%;">
@@ -294,6 +344,15 @@ async function loadCatalogue() {
 
         filterAndSort();
 
+        // NOUVEAU : Restauration de la position de scroll si on revient d'une page produit
+        setTimeout(() => {
+            const savedScroll = sessionStorage.getItem('terraophis_scroll');
+            if (savedScroll) {
+                window.scrollTo({ top: parseInt(savedScroll), behavior: 'smooth' });
+                sessionStorage.removeItem('terraophis_scroll');
+            }
+        }, 100);
+
     } catch (error) {
         console.error("Erreur catalogue :", error);
         productGrid.innerHTML = '<p>Erreur lors du chargement des produits.</p>';
@@ -318,8 +377,8 @@ async function loadProductDetails() {
 
         if (docSnap.exists()) {
             const product = docSnap.data();
+            window.currentProductDetails = product; // NOUVEAU : Enregistrement global pour les calculs de changements d'options
             
-            // NOUVEAU : Calcul du stock virtuel si on atterrit directement sur la fiche d'un pack
             if (product.bundleItems && product.bundleItems.length > 0) {
                 let virtualStock = Infinity;
                 for (const bItem of product.bundleItems) {
@@ -338,7 +397,8 @@ async function loadProductDetails() {
             }
 
             const photos = product.photos && product.photos.length > 0 ? product.photos : ['assets/img/placeholder.jpg'];
-            const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 1.4rem; margin-right: 12px; font-weight: normal;">${product.oldPrice} €</span>` : '';
+            // NOUVEAU : Formatage à 2 décimales du prix barré dans la page produit
+            const oldPriceHtml = product.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 1.4rem; margin-right: 12px; font-weight: normal;">${Number(product.oldPrice).toFixed(2)} €</span>` : '';
             const formattedDescription = product.description.replace(/\n/g, '<br>');
             const careGuideHtml = product.careGuide ? product.careGuide.replace(/\n/g, '<br>') : 'Aucune information complémentaire.';
 
@@ -360,17 +420,30 @@ async function loadProductDetails() {
                 lotSelectorHtml = `
                     <div class="lot-selector">
                         <label style="display:block; font-size:0.85rem; margin-bottom:5px;">${product.customOptions.name || 'Option'}</label>
-                        <select id="lotSelect" onchange="updateDisplayPrice()">
+                        <select id="lotSelect" onchange="window.updateDisplayPrice()">
                             ${variants.map(v => {
-                                const isDisabled = product.stock < 1 ? 'disabled' : ''; // Pour le matériel, 1 de stock suffit
+                                // NOUVEAU : On calcule le stock cumulé de la variante depuis la matrice
+                                let variantTotalStock = 0;
+                                if (product.variantStocks && Object.keys(product.variantStocks).length > 0) {
+                                    for (const [key, val] of Object.entries(product.variantStocks)) {
+                                        // Si la clé de la matrice correspond à l'option ou commence par "Option_"
+                                        if (key === v.label || key.startsWith(v.label + '_')) {
+                                            variantTotalStock += (parseInt(val) || 0);
+                                        }
+                                    }
+                                } else {
+                                    variantTotalStock = product.stock || 0;
+                                }
+                                
+                                const isDisabled = variantTotalStock < 1 ? 'disabled' : ''; 
                                 if (!isDisabled) canBuySomething = true;
                                 
-                                return `<option value="${v.label}" ${isDisabled}>${v.label} - ${v.price} € ${isDisabled ? '(Rupture de stock)' : ''}</option>`;
+                                return `<option value="${v.label}" ${isDisabled}>${v.label} - ${Number(v.price).toFixed(2)} € ${isDisabled ? '(Rupture)' : ''}</option>`;
                             }).join('')}
                         </select>
                     </div>
                 `;
-            } 
+            }
             // Fin NOUVEAU
             else if (product.prices && Object.keys(product.prices).length > 0) {
                 const sortedLots = Object.keys(product.prices).map(Number).sort((a, b) => b - a);
@@ -388,7 +461,8 @@ async function loadProductDetails() {
                                 const isSelected = lot === defaultLot && !isDisabled ? 'selected' : '';
                                 if (!isDisabled) canBuySomething = true;
                                 
-                                return `<option value="${lot}" ${isSelected} ${isDisabled}>Lot de ${lot} - ${product.prices[lot]} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
+                                // NOUVEAU : Formatage et ajout attribut data-stock pour la page produit
+                                return `<option value="${lot}" data-stock="${product.stock}" ${isSelected} ${isDisabled}>Lot de ${lot} - ${Number(product.prices[lot]).toFixed(2)} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
                             }).join('')}
                         </select>
                     </div>
@@ -415,7 +489,8 @@ async function loadProductDetails() {
                                 const isSelected = opt.lot === defaultOpt?.lot && !isDisabled ? 'selected' : '';
                                 if (!isDisabled) canBuySomething = true;
                                 
-                                return `<option value="${opt.lot}" ${isSelected} ${isDisabled}>${opt.label} - ${opt.price} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
+                                // NOUVEAU : Formatage et ajout attribut data-stock pour la page produit
+                                return `<option value="${opt.lot}" data-stock="${product.stock}" ${isSelected} ${isDisabled}>${opt.label} - ${Number(opt.price).toFixed(2)} € ${isDisabled ? '(Stock insuffisant)' : ''}</option>`;
                             }).join('')}
                         </select>
                     </div>
@@ -428,7 +503,7 @@ async function loadProductDetails() {
                 freeSelectorHtml = `
                     <div class="lot-selector" style="margin-top: 15px;">
                         <label style="display:block; font-size:0.85rem; margin-bottom:5px;">${product.freeOptions.name}</label>
-                        <select id="freeOptionSelect">
+                        <select id="freeOptionSelect" onchange="window.updateDisplayPrice()">
                             ${product.freeOptions.values.map(val => `<option value="${val}">${val}</option>`).join('')}
                         </select>
                     </div>
@@ -452,7 +527,7 @@ async function loadProductDetails() {
                     <div class="product-right">
                         <h1 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
                         <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
-                        <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${defaultPrice} €</span></p>
+                        <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${Number(defaultPrice).toFixed(2)} €</span></p>
                         
                         ${lotSelectorHtml}
                         ${freeSelectorHtml}
@@ -460,7 +535,7 @@ async function loadProductDetails() {
                         <button class="btn-buy" onclick="addSelectedToCart('${docSnap.id}')" style="width: 100%; padding: 18px; font-size: 1.1rem; margin-bottom: 10px;" ${!canBuySomething ? 'disabled' : ''}>
                             ${canBuySomething ? 'Ajouter au panier' : 'RUPTURE DE STOCK'}
                         </button>
-                        <p style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 0;">Stock dispo : ${product.stock}</p>
+                        <p id="displayStock" style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 0;">Stock dispo : ${product.customOptions && product.customOptions.variants && product.customOptions.variants.length > 0 ? (product.customOptions.variants.sort((a, b) => a.price - b.price)[0].stock !== undefined && product.customOptions.variants[0].stock !== "" ? product.customOptions.variants[0].stock : product.stock) : product.stock}</p>
                         
                         <div class="care-guide-section">
                             <h3>Fiche Complémentaire</h3>
@@ -469,6 +544,7 @@ async function loadProductDetails() {
                     </div>
                 </div>
             `;
+            window.updateDisplayPrice(); // NOUVEAU : Synchronisation forcée des stocks au premier affichage
         } else {
             detailsContainer.innerHTML = '<p>Ce produit n\'existe plus.</p>';
         }
@@ -481,10 +557,44 @@ async function loadProductDetails() {
 // Fonctions globales pour le fonctionnement de la page et du panier
 window.updateDisplayPrice = () => {
     const select = document.getElementById('lotSelect');
-    if (select) {
+    const freeSelect = document.getElementById('freeOptionSelect');
+    const product = window.currentProductDetails;
+
+    if (select && select.options && select.options.length > 0 && select.selectedIndex !== -1) {
         const selectedOption = select.options[select.selectedIndex];
-        const priceText = selectedOption.text.split(' - ')[1]; 
-        document.getElementById('displayPrice').textContent = priceText;
+        const priceText = selectedOption.text.split(' - ')[1].split(' €')[0]; 
+        document.getElementById('displayPrice').textContent = Number(priceText).toFixed(2) + ' €';
+        
+        let currentStock = product ? product.stock : 0;
+        
+        if (product && product.variantStocks) {
+            const customVal = select.value;
+            const freeVal = freeSelect ? freeSelect.value : null;
+            const combKey = freeVal ? `${customVal}_${freeVal}` : customVal;
+            
+            if (product.variantStocks[combKey] !== undefined && product.variantStocks[combKey] !== "") {
+                currentStock = parseInt(product.variantStocks[combKey]) || 0;
+            } else if (Object.keys(product.variantStocks).length > 0) {
+                currentStock = 0; // Si la matrice existe mais pas cette déclinaison précise
+            }
+        }
+        
+        const stockEl = document.getElementById('displayStock');
+        if (stockEl) {
+            stockEl.textContent = `Stock dispo : ${currentStock}`;
+        }
+
+        // NOUVEAU : Mise à jour de l'état du bouton d'ajout au panier selon la combinaison choisie
+        const buyBtn = document.querySelector('button[onclick^="addSelectedToCart"]');
+        if (buyBtn) {
+            if (currentStock < 1) {
+                buyBtn.disabled = true;
+                buyBtn.textContent = 'RUPTURE DE STOCK';
+            } else {
+                buyBtn.disabled = false;
+                buyBtn.textContent = 'Ajouter au panier';
+            }
+        }
     }
 };
 
@@ -507,7 +617,6 @@ window.addSelectedToCart = (id) => {
 async function validateCartStock(simulatedCart) {
     let physicalNeeds = {};
     
-    // Récupération des définitions de tous les produits du panier
     const uniqueProductIds = [...new Set(simulatedCart.map(i => i.id))];
     const productDefs = {};
     
@@ -516,13 +625,11 @@ async function validateCartStock(simulatedCart) {
         if(snap.exists()) productDefs[id] = snap.data();
     }
 
-    // Calcul de la quantité physique nécessaire pour CHAQUE insecte
     for (const simItem of simulatedCart) {
         const def = productDefs[simItem.id];
         if (!def) continue;
 
         if (def.bundleItems && def.bundleItems.length > 0) {
-            // C'est un pack : on déballe le pack pour compter les insectes
             for (const bItem of def.bundleItems) {
                 if (!physicalNeeds[bItem.productId]) physicalNeeds[bItem.productId] = 0;
                 const itemLot = parseInt(bItem.lot) || 1;
@@ -530,29 +637,49 @@ async function validateCartStock(simulatedCart) {
                 physicalNeeds[bItem.productId] += simItem.quantity * itemQty * itemLot;
             }
         } else {
-            // C'est un insecte normal ou un matériel
-            // NOUVEAU : Si lotSize est un texte (Option matériel), le multiplicateur de stock est toujours 1.
+            // NOUVEAU : Construction de l'identifiant unique croisé pour le suivi du panier
+            let trackingKey = simItem.id;
+            if (typeof simItem.lotSize === 'string') {
+                trackingKey = simItem.freeOption ? `${simItem.id}_${simItem.lotSize}_${simItem.freeOption}` : `${simItem.id}_${simItem.lotSize}`;
+            }
+
             const multiplier = (typeof simItem.lotSize === 'number') ? simItem.lotSize : 1;
-            if (!physicalNeeds[simItem.id]) physicalNeeds[simItem.id] = 0;
-            physicalNeeds[simItem.id] += simItem.quantity * multiplier;
+            if (!physicalNeeds[trackingKey]) physicalNeeds[trackingKey] = 0;
+            physicalNeeds[trackingKey] += simItem.quantity * multiplier;
         }
     }
 
-    // Vérification finale : est-ce que les besoins dépassent le stock réel ?
-    for (const [pId, neededQty] of Object.entries(physicalNeeds)) {
+    for (const [trackingKey, neededQty] of Object.entries(physicalNeeds)) {
         let realStock = 0;
-        if (productDefs[pId]) {
-            realStock = productDefs[pId].stock;
+        
+        if (trackingKey.includes('_')) {
+            const parts = trackingKey.split('_');
+            const pId = parts[0];
+            const lotSize = parts[1];
+            const freeOpt = parts[2] || null;
+            
+            const def = productDefs[pId];
+            const combKey = freeOpt ? `${lotSize}_${freeOpt}` : lotSize;
+            
+            if (def && def.variantStocks && def.variantStocks[combKey] !== undefined) {
+                realStock = def.variantStocks[combKey];
+            } else if (def) {
+                realStock = def.stock;
+            }
         } else {
-            const snap = await getDoc(doc(db, "products", pId));
-            if (snap.exists()) realStock = snap.data().stock;
+            if (productDefs[trackingKey]) {
+                realStock = productDefs[trackingKey].stock;
+            } else {
+                const snap = await getDoc(doc(db, "products", trackingKey));
+                if (snap.exists()) realStock = snap.data().stock;
+            }
         }
 
         if (neededQty > realStock) {
-            return false; // Impossible, on bloque l'ajout !
+            return false; 
         }
     }
-    return true; // Le panier est valide
+    return true; 
 }
 
 // NOUVEAU : Logique du panier avec gestion du Stock Croisé
@@ -676,6 +803,15 @@ window.renderCart = async () => {
                 if (p.customOptions && p.customOptions.variants && typeof itemLot === 'string') {
                     const variant = p.customOptions.variants.find(v => v.label === itemLot);
                     if (variant) itemPrice = variant.price;
+                    
+                    // NOUVEAU : Application de la limite de stock croisée précise dans le panier
+                    if (p.variantStocks) {
+                        const freeOpt = cart[i].freeOption;
+                        const combKey = freeOpt ? `${itemLot}_${freeOpt}` : itemLot;
+                        if (p.variantStocks[combKey] !== undefined) {
+                            maxStock = p.variantStocks[combKey];
+                        }
+                    }
                 } else if (p.prices && p.prices[itemLot] !== undefined) {
                     itemPrice = p.prices[itemLot];
                 } else {
@@ -710,7 +846,7 @@ window.renderCart = async () => {
                 }
                 const freeOptText = cart[i].freeOption ? `<br><span style="font-size:0.75rem; color:#888;">${cart[i].freeOption}</span>` : '';
 
-                const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${p.oldPrice} €</span>` : '';
+                const oldPriceHtml = p.oldPrice ? `<span style="text-decoration: line-through; color: #a35d5d; font-size: 0.85rem; margin-right: 6px; font-weight: normal;">${Number(p.oldPrice).toFixed(2)} €</span>` : '';
 
                 html += `
                     <div class="cart-item" style="position: relative;">
@@ -718,7 +854,7 @@ window.renderCart = async () => {
                         <div class="cart-item-details">
                             <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
                             <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
-                            <p class="cart-item-price">${oldPriceHtml}${itemPrice} €</p>
+                            <p class="cart-item-price">${oldPriceHtml}${Number(itemPrice).toFixed(2)} €</p>
                             <div class="cart-qty-controls">
                                 <button onclick="updateCartQty('${cart[i].cartId}', -1)">-</button>
                                 <span>${cart[i].quantity}</span>
@@ -1187,3 +1323,10 @@ loadNavbar();
 
 // NOUVEAU : Lancement de l'initialisation du panier
 initFloatingCart();
+
+// NOUVEAU : Sauvegarde du scroll avant de quitter la boutique ou l'accueil
+window.addEventListener('beforeunload', () => {
+    if (window.location.pathname.includes('boutique') || window.location.pathname === '/' || window.location.search.includes('cat=')) {
+        sessionStorage.setItem('terraophis_scroll', window.scrollY);
+    }
+});

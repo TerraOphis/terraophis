@@ -1358,6 +1358,21 @@ footer {
     align-self: center;
 }
 
+/* ========================================= */
+/* ANIMATIONS BOUTIQUE & CHARGEMENT          */
+/* ========================================= */
+
+/* Animation du texte de chargement */
+@keyframes pulse {
+    0% { opacity: 0.5; transform: scale(0.98); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Animation d'apparition fluide des cartes produits */
+@keyframes fadeInProduct {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 
 

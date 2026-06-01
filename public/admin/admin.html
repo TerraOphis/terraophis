@@ -79,7 +79,8 @@
                         <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
                             <input type="text" id="customOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
                             <input type="number" id="customOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
-                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                            <input type="number" id="customOptionStock" placeholder="Stock (opt.)" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;" title="Laisser vide pour utiliser le stock global du produit">
+                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionStock', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
                         </div>
                         <ul id="customOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
@@ -93,6 +94,8 @@
                         </div>
                         <ul id="freeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
+
+                    <div id="matrixStockContainer" style="width: 100%;"></div>
 
                     <div class="form-group">
                         <input type="number" name="stock" placeholder="Quantité en stock" required>
@@ -396,7 +399,8 @@
                         <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
                             <input type="text" id="editCustomOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
                             <input type="number" id="editCustomOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
-                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                            <input type="number" id="editCustomOptionStock" placeholder="Stock (opt.)" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;" title="Laisser vide pour utiliser le stock global du produit">
+                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionStock', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
                         </div>
                         <ul id="editCustomOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
@@ -410,6 +414,8 @@
                         </div>
                         <ul id="editFreeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
+
+                    <div id="editMatrixStockContainer" style="width: 100%;"></div>
 
                     <div class="form-group">
                         <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">

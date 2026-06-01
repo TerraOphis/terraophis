@@ -161,8 +161,6 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             let weatherWarning = 'OK';
 
             // NOUVEAU : Utilisation d'une "Transaction" Firestore.
-            // Cela verrouille la commande en base de données. Si Stripe envoie le Webhook 2 fois en même temps,
-            // la 2ème requête attendra que la 1ère ait fini, verra que le statut est passé à "Payé", et s'annulera !
             await admin.firestore().runTransaction(async (transaction) => {
                 const orderSnap = await transaction.get(orderRef);
                 
@@ -173,40 +171,36 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 const orderData = orderSnap.data();
                 weatherWarning = orderData.weatherWarning || 'OK';
 
-                // On vérifie le statut DANS la transaction verrouillée
                 if (orderData.status !== 'En attente de paiement') {
                     throw new Error("ALREADY_PROCESSED");
                 }
 
-                // NOUVEAU : Algorithme de gestion des stocks corrigé et ordonné
                 const stockDeductions = {}; 
                 const productsToFetch = [];
 
-                // Étape 1 : On liste tous les produits principaux de la commande
+                // Étape 1 : On liste tous les produits principaux (AVEC freeOption)
                 if (orderData.items && orderData.items.length > 0) {
                     for (const item of orderData.items) {
                         productsToFetch.push({
                             id: item.id,
                             ref: admin.firestore().collection('products').doc(item.id),
                             quantity: item.quantity,
-                            lotSize: item.lotSize || 1
+                            lotSize: item.lotSize || 1,
+                            freeOption: item.freeOption || null // NOUVEAU : Récupération de l'option gratuite
                         });
                     }
                 }
 
-                // Étape 2 : Première passe de lecture Firestore obligatoire pour les produits principaux
+                // Étape 2 : Première passe de lecture Firestore
                 for (const p of productsToFetch) {
                     const prodSnap = await transaction.get(p.ref);
                     if (prodSnap.exists) {
                         const prodData = prodSnap.data();
 
-                        // Correction : On vérifie la présence du tableau de composants du pack
                         if (prodData.bundleItems && Array.isArray(prodData.bundleItems) && prodData.bundleItems.length > 0) {
-                            // C'EST UN PACK : On extrait ses composants
+                            // C'EST UN PACK
                             for (const bItem of prodData.bundleItems) {
                                 const subId = bItem.productId;
-                                
-                                // NOUVEAU : Sécurisation mathématique pour éviter toute erreur de déduction silencieuse
                                 const itemLot = parseInt(bItem.lot) || 1;
                                 const itemQty = parseInt(bItem.qty) || 1;
                                 const qtyToDeduct = p.quantity * itemQty * itemLot;
@@ -214,39 +208,57 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                                 if (!stockDeductions[subId]) {
                                     stockDeductions[subId] = {
                                         ref: admin.firestore().collection('products').doc(subId),
+                                        isOption: false,
                                         amount: 0
                                     };
                                 }
                                 stockDeductions[subId].amount += qtyToDeduct;
                             }
                         } else {
-                            // C'EST UN PRODUIT STANDARD
-                            const qtyToDeduct = p.quantity * p.lotSize;
+                            // NOUVEAU : Détection infaillible basée sur la présence réelle de la matrice
+                            const hasVariants = prodData.variantStocks && Object.keys(prodData.variantStocks).length > 0;
+                            const qtyToDeduct = hasVariants ? p.quantity : (p.quantity * (p.lotSize || 1));
+                            
+                            const dKey = hasVariants ? `${p.id}_${p.lotSize}_${p.freeOption}` : p.id;
 
-                            if (!stockDeductions[p.id]) {
-                                stockDeductions[p.id] = {
+                            if (!stockDeductions[dKey]) {
+                                stockDeductions[dKey] = {
                                     ref: p.ref,
+                                    isOption: hasVariants,
+                                    lotSize: p.lotSize,
+                                    freeOption: p.freeOption,
                                     amount: 0
                                 };
                             }
-                            stockDeductions[p.id].amount += qtyToDeduct;
+                            stockDeductions[dKey].amount += qtyToDeduct;
                         }
                     }
                 }
 
-                // Étape 3 : Seconde passe de lecture pour les sous-produits des packs (Contrainte des Transactions Firestore)
-                for (const id in stockDeductions) {
-                    await transaction.get(stockDeductions[id].ref);
+                // Étape 3 : Seconde passe de lecture pour les packs
+                for (const key in stockDeductions) {
+                    await transaction.get(stockDeductions[key].ref);
                 }
 
-                // Étape 4 : Application finale et sécurisée des déductions de stocks
-                for (const id in stockDeductions) {
-                    transaction.update(stockDeductions[id].ref, {
-                        stock: admin.firestore.FieldValue.increment(-stockDeductions[id].amount)
-                    });
+                // Étape 4 : Application finale et ciblée des déductions
+                for (const key in stockDeductions) {
+                    const item = stockDeductions[key];
+                    
+                    if (item.isOption) {
+                        // C'est un accessoire : On retire uniquement dans la sous-clé de la matrice
+                        const combKey = item.freeOption ? `${item.lotSize}_${item.freeOption}` : item.lotSize;
+                        transaction.update(item.ref, {
+                            // Firestore permet de cibler un sous-champ spécifique avec la notation pointée
+                            [`variantStocks.${combKey}`]: admin.firestore.FieldValue.increment(-item.amount)
+                        });
+                    } else {
+                        // C'est un insecte classique : On retire dans le stock global
+                        transaction.update(item.ref, {
+                            stock: admin.firestore.FieldValue.increment(-item.amount)
+                        });
+                    }
                 }
 
-                // 2. Préparation et mise à jour immédiate du statut de la commande
                 const updatePayload = {
                     status: 'Payé',
                     amountPaid: amountPaidThisSession,
@@ -672,6 +684,59 @@ app.post('/api/upload-order-document', verifyAdmin, upload.single('document'), a
         res.status(200).json({ url: publicUrl });
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// NOUVEAU : Route pour l'envoi de l'e-mail de bienvenue
+app.post('/api/send-welcome-email', async (req, res) => {
+    try {
+        const { email, name } = req.body;
+        if (!email) return res.status(400).json({ error: "Email manquant" });
+
+        // NOUVEAU : On récupère uniquement le prénom pour un ton plus chaleureux
+        const firstName = name ? name.split(' ')[0] : 'passionné(e)';
+
+        const welcomeHtml = `
+            <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
+                    <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
+                        <img src="https://working.terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                        <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Bienvenue dans notre élevage !</p>
+                    </div>
+                    <div style="padding: 35px; color: #4a4238; text-align: center;">
+                        <h2 style="font-size: 20px; margin-top: 0; color: #4a4238; font-weight: 600;">Bienvenue sur Terraophis, ${firstName} ! 🌿</h2>
+                        <p style="font-size: 15px; line-height: 1.6; color: #555;">Votre compte client a été créé avec succès. Vous faites désormais partie de notre communauté !</p>
+                        
+                        <div style="background-color: #f4f8f0; border: 1px solid #d4e3c5; padding: 18px; border-radius: 8px; margin: 25px 0; text-align: left;">
+                            <h4 style="margin: 0 0 5px 0; color: #4d5d30; font-size: 15px;">Ce qui vous attend dans votre espace :</h4>
+                            <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #4a4238; line-height: 1.6;">
+                                <li>Suivi en temps réel de vos commandes et livraisons.</li>
+                                <li>Historique de vos spécimens et accès aux fiches de suivi.</li>
+                                <li>Communication directe et prioritaire avec nos éleveurs.</li>
+                            </ul>
+                        </div>
+
+                        <a href="https://terraophis.fr/boutique" style="display: inline-block; background-color: #4d5d30; color: #f9f8f2; text-decoration: none; padding: 14px 30px; border-radius: 8px; font-weight: 600; font-size: 14px; margin-top: 10px;">Explorer la boutique</a>
+                        
+                        <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">À très bientôt,<br>L'équipe Terraophis</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: `"Terraophis" <terra.ophis@gmail.com>`,
+            to: email,
+            subject: "Bienvenue sur Terraophis ! 🌿",
+            html: welcomeHtml
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: "Email de bienvenue envoyé" });
+    } catch (error) {
+        console.error("Erreur e-mail de bienvenue :", error);
+        res.status(500).json({ error: "Erreur serveur" });
     }
 });
 
