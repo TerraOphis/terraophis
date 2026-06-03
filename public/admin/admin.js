@@ -197,34 +197,41 @@ window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
     }
 };
 
-// NOUVEAU: Fonction radicale pour unifier et nettoyer le texte d'un éditeur
 window.unifyEditorText = (editorId) => {
     const editor = document.getElementById(editorId);
     if (!editor) return;
 
-    // 1. Nettoyage HTML pur : suppression des attributs style résiduels
+    // NOUVEAU : Nettoyage absolu de tous les attributs (style, class, color, etc.)
     editor.querySelectorAll('*').forEach(el => {
-        el.removeAttribute('style');
-        el.removeAttribute('class');
-        el.removeAttribute('face');
-        el.removeAttribute('size');
-        el.removeAttribute('color');
+        while (el.attributes.length > 0) {
+            el.removeAttribute(el.attributes[0].name);
+        }
     });
 
-    // 2. Sélection de tout le contenu
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // NOUVEAU : Fonction pour extraire le texte et détruire la balise parente
+    const unwrap = (el) => {
+        const parent = el.parentNode;
+        while (el.firstChild) {
+            parent.insertBefore(el.firstChild, el);
+        }
+        parent.removeChild(el);
+    };
 
-    // 3. Application forcée de la police de base
-    document.execCommand('fontName', false, 'Montserrat, sans-serif');
-    document.execCommand('fontSize', false, '3');
-    document.execCommand('foreColor', false, '#4a4238'); // var(--accent-brown)
-    
-    selection.removeAllRanges();
-    alert("Texte nettoyé et unifié avec succès ! ✨");
+    // NOUVEAU : Destruction de TOUTES les balises de formatage (Gras, italique, span, font...)
+    const inlines = editor.querySelectorAll('font, span, b, strong, i, em, u');
+    inlines.forEach(unwrap);
+
+    // NOUVEAU : Transformation des anciens titres et div invisibles en paragraphes propres
+    const blocks = editor.querySelectorAll('h1, h2, h3, h4, h5, h6, div');
+    blocks.forEach(block => {
+        const p = document.createElement('p');
+        while (block.firstChild) {
+            p.appendChild(block.firstChild);
+        }
+        block.parentNode.replaceChild(p, block);
+    });
+
+    alert("Texte totalement nettoyé et réinitialisé ! ✨ Vous pouvez maintenant appliquer vos titres et gras proprement.");
 };
 
 onAuthStateChanged(auth, (user) => {
