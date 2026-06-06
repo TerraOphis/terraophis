@@ -1596,23 +1596,30 @@ footer {
 
     .nav-links {
         position: fixed;
-        /* S'ajuste dynamiquement sous la navbar. ~80px selon ta hauteur de header */
         top: 85px; 
-        right: -100%; /* Caché par défaut */
+        right: -100%; 
         width: 100%;
-        height: calc(100vh - 85px); /* Prend le reste de la page */
+        height: calc(100dvh - 85px); 
         background-color: var(--primary-beige);
         flex-direction: column;
         align-items: center;
         justify-content: flex-start;
-        padding-top: 50px;
+        /* NOUVEAU : On utilise box-sizing et un padding global pour que le menu tienne parfaitement dans l'écran sans créer d'énorme vide */
+        padding: 50px 0 80px 0;
+        box-sizing: border-box; 
         transition: right 0.4s ease-in-out;
         z-index: 1001;
         overflow-y: auto;
     }
 
+    /* NOUVEAU : On harmonise la taille de texte de tous les liens principaux (Accueil, Conseils, À Propos) avec le lien Boutique */
+    .nav-links > li > a {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
     .nav-links.open {
-        right: 0; /* Fait glisser le menu dans la vue */
+        right: 0; 
     }
 
     .nav-links li {
