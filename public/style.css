@@ -1624,6 +1624,11 @@ footer {
         margin-left: 0;
     }
 
+    /* NOUVEAU : Masque le nom du client à côté de l'icône de profil sur mobile */
+    #nav-auth-btn span {
+        display: none;
+    }
+
     /* NOUVEAU : Centrer et mettre en valeur le titre parent "BOUTIQUE" */
     .dropdown {
         width: 100%;
@@ -1674,7 +1679,7 @@ footer {
         width: 100%;
         border-radius: 0;
         margin: 0;
-        aspect-ratio: 4 / 3; /* Un poil plus vertical sur mobile */
+        aspect-ratio: 16 / 9;
     }
 
     .features-grid {
@@ -1746,7 +1751,13 @@ footer {
     }
 
     .footer-brand {
+        width:100%;
         flex: auto;
+        /* NOUVEAU : Centrage forcé pour tous les éléments enfants */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
     }
 
     .footer-socials {
