@@ -323,7 +323,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                         <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
                             <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
                                 <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
-                                    <img src="https://working.terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                                    <img src="https://terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
                                     <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Boutique d'Arthropodes & Insectes de collection</p>
                                 </div>
                                 <div style="padding: 35px; color: #4a4238; text-align: center;">
@@ -700,7 +700,7 @@ app.post('/api/send-welcome-email', async (req, res) => {
             <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
                 <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
                     <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
-                        <img src="https://working.terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                        <img src="https://terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
                         <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Bienvenue dans notre élevage !</p>
                     </div>
                     <div style="padding: 35px; color: #4a4238; text-align: center;">
