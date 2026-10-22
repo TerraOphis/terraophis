@@ -3010,7 +3010,7 @@ h1, h2, h3, h4 { font-weight: 400; letter-spacing: -.01em; }
 .reveal {
     opacity: 0;
     transform: translateY(28px);
-    clip-path: inset(100% -40% -40% -40%);
+    clip-path: inset(55% -40% -40% -40%); /* jamais 100 % : la zone visible doit rester non nulle pour IntersectionObserver */
     transition: opacity .7s ease, transform 1s var(--ease), clip-path 1s var(--ease);
 }
 .reveal.in { opacity: 1; transform: none; clip-path: inset(-40% -40% -40% -40%); }
