@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"><!-- À retirer lors de la fusion sur le site principal -->
+    <title>Guide d'élevage | Terra Ophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <main class="container">
+        <div class="back-link-container" style="margin: 20px 0;">
+            <a href="conseils.html" style="color: var(--accent-brown); text-decoration: none; font-weight: 600;">← Retour aux guides</a>
+        </div>
+
+        <article id="singleGuideContainer" class="single-guide">
+            <p style="text-align: center;">Chargement de la fiche conseil... 🌿</p>
+        </article>
+    </main>
+
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer"></div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+
+    <footer id="main-footer"></footer>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

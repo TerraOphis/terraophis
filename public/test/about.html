@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"><!-- À retirer lors de la fusion sur le site principal -->
+    <title data-c="apropos.meta.title">À Propos | Terra Ophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
+    <style>
+    .about-section { margin-bottom: 40px; }
+    .about-section h2 { font-size: clamp(1.8rem, 3vw, 2.4rem); margin-bottom: 15px; }
+    .about-section > div { font-size: 1.05rem; line-height: 1.8; color: var(--choco-soft) !important; }
+    .dynamic-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 40px 0; }
+    .dynamic-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); box-shadow: var(--shadow); transition: transform .5s var(--ease); }
+    .dynamic-gallery img:nth-child(odd) { transform: rotate(-1.2deg); }
+    .dynamic-gallery img:nth-child(even) { transform: rotate(1.2deg) translateY(10px); }
+    .dynamic-gallery img:hover { transform: rotate(0) scale(1.03); }
+    .side-by-side-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin: 40px 0; }
+    .side-by-side-grid .about-section { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 34px; box-shadow: var(--shadow-sm); margin: 0; }
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 26px; margin-top: 30px; }
+    .team-card { background: var(--white); padding: 30px 20px; border-radius: var(--radius); border: 1px solid var(--border); text-align: center; box-shadow: var(--shadow-sm); transition: transform .4s var(--ease); }
+    .team-card:hover { transform: translateY(-8px); }
+    .team-card img { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto 15px; border: 5px solid var(--leaf-pale); }
+    .team-card h3 { margin: 0 0 5px 0; font-size: 1.3rem; }
+    .team-card p { margin: 0; font-size: .92rem; color: var(--muted); line-height: 1.5; }
+    @media (max-width: 768px) { .side-by-side-grid { grid-template-columns: 1fr; } }
+</style>
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <header data-s="apropos.entete" data-s-label="En-tête" class="page-hero">
+        <div class="falling-leaves" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="container">
+            <img src="assets/img/emblem.png" alt="" class="emblem-mini">
+            <span data-c="apropos.entete.01" class="eyebrow reveal">À propos</span>
+            <h1 data-c="apropos.entete.02" class="title-xl reveal reveal-delay-1">Une passion qui a pris<br><span class="underline-leaf">racine</span></h1>
+            <p data-c="apropos.entete.03" class="reveal reveal-delay-2">Terra Ophis, c'est une petite équipe de passionnés d'invertébrés qui élève, observe et partage, une colonie après l'autre.</p>
+        </div>
+    </header>
+
+    <main class="container" style="max-width:1000px">
+        <div id="aboutContainer">
+            <p class="loading-note">Chargement de notre histoire… 🌿</p>
+        </div>
+    </main>
+
+    <section data-s="apropos.valeurs" data-s-label="Nos valeurs" class="section">
+        <div class="container">
+            <div class="section-head reveal">
+                <span data-c="apropos.valeurs.01" class="eyebrow">Ce qui nous anime</span>
+                <h2 data-c="apropos.valeurs.02" class="title-lg">Trois valeurs, une seule priorité : le vivant</h2>
+            </div>
+            <div class="grid-3">
+                <article class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M12 12C12 7 8 4 3 4c0 5 4 8 9 8Z"/><path d="M12 15c0-4 3-7 8-7 0 4-3 7-8 7Z"/></svg></div>
+                    <h3 data-c="apropos.valeurs.03">Le respect de l'animal</h3>
+                    <p data-c="apropos.valeurs.04">Des conditions d'élevage soignées, des colonies jamais surexploitées et des envois uniquement quand la météo le permet.</p>
+                </article>
+                <article class="card reveal reveal-delay-1">
+                    <div class="card-icon card-icon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+                    <h3 data-c="apropos.valeurs.05">La curiosité</h3>
+                    <p data-c="apropos.valeurs.06">Observer, tester, apprendre : chaque espèce a ses secrets, et on adore les découvrir… puis les partager.</p>
+                </article>
+                <article class="card reveal reveal-delay-2">
+                    <div class="card-icon card-icon--peach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg></div>
+                    <h3 data-c="apropos.valeurs.07">La transmission</h3>
+                    <p data-c="apropos.valeurs.08">Des conseils clairs pour que chaque colonie prospère, du premier lot de cloportes aux espèces les plus rares.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer"></div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // NOUVEAU : Moteur de rendu du nouveau layout structuré de la page À Propos
+async function loadAboutPage() {
+    const container = document.getElementById('aboutContainer');
+    try {
+        const docSnap = await getDoc(doc(db, "settings", "aboutPage"));
+        if (!docSnap.exists()) {
+            container.innerHTML = '<p style="text-align:center;">Contenu en cours de configuration dans l\'espace admin.</p>';
+            return;
+        }
+        
+        const data = docSnap.data();
+        
+        // Construction de la galerie haute
+        let topGalleryHtml = '';
+        if (data.topGallery && data.topGallery.length > 0) {
+            topGalleryHtml = `<div class="dynamic-gallery">` + data.topGallery.map(url => `<img src="${url}" alt="Terra Ophis">`).join('') + `</div>`;
+        }
+        
+        // Construction de la galerie basse
+        let bottomGalleryHtml = '';
+        if (data.bottomGallery && data.bottomGallery.length > 0) {
+            bottomGalleryHtml = `<div class="dynamic-gallery">` + data.bottomGallery.map(url => `<img src="${url}" alt="Terra Ophis">`).join('') + `</div>`;
+        }
+        
+        // Construction du trombinoscope
+        let teamHtml = '';
+        if (data.members && data.members.length > 0) {
+            teamHtml = `<div class="team-grid">` + data.members.map(m => `
+                <div class="team-card">
+                    <img src="${m.photo || 'assets/img/placeholder.jpg'}" alt="${m.name}">
+                    <h3>${m.name}</h3>
+                    <p>${m.role}</p>
+                </div>
+            `).join('') + `</div>`;
+        }
+
+        container.innerHTML = `
+            <section class="about-section" style="text-align: center; max-width: 800px; margin: 0 auto 40px auto;">
+                <h2>Qui sommes-nous ?</h2>
+                <div>${data.topTeamText || ''}</div>
+            </section>
+
+            ${topGalleryHtml}
+
+            <div class="side-by-side-grid">
+                <section class="about-section">
+                    <h2>Une passion devenue projet</h2>
+                    <div>${data.passionText || ''}</div>
+                </section>
+                
+                <section class="about-section">
+                    <h2>Notre objectif</h2>
+                    <div>${data.objectifText || ''}</div>
+                </section>
+            </div>
+
+            ${bottomGalleryHtml}
+
+            <section class="about-section" style="margin-top: 60px;">
+                ${teamHtml ? '<h2 style="text-align: center;">Notre équipe</h2>' + teamHtml : ''}
+            </section>
+        `;
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = '<p style="text-align:center;">Erreur lors du chargement.</p>';
+    }
+}
+loadAboutPage();
+    </script>
+</body>
+</html>

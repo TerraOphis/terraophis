@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"><!-- À retirer lors de la fusion sur le site principal -->
+    <title data-c="boutique.meta.title">Boutique | Terra Ophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar">
+    </nav>
+
+    <header data-s="boutique.entete" data-s-label="En-tête" class="page-hero page-hero--compact">
+        <div class="falling-leaves" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="container">
+            <img src="assets/img/emblem.png" alt="" class="emblem-mini">
+            <span data-c="boutique.entete.01" class="eyebrow reveal">La boutique</span>
+            <h1 data-c="boutique.entete.02" class="title-xl reveal reveal-delay-1">Trouvez votre <span class="underline-leaf">future colonie</span></h1>
+            <p data-c="boutique.entete.03" class="reveal reveal-delay-2">Isopodes, iules, coléoptères, phasmes et tout le matériel pour les accueillir. Élevés chez nous, expédiés avec soin.</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="shop-controls reveal">
+            <input type="text" id="shopSearch" placeholder="🔎 Rechercher une espèce…" aria-label="Rechercher">
+            <select id="categoryFilter" aria-label="Catégorie">
+                <option value="all">Toutes les catégories</option>
+                <option value="cloportes">Isopodes</option>
+                <option value="iules">Iules</option>
+                <option value="coleopteres">Coléoptères</option>
+                <option value="mantes">Mantes</option>
+                <option value="phasmes">Phasmes</option>
+                <option value="accessoires">Accessoires</option>
+                <option value="offres">Offres Spéciales</option>
+            </select>
+            <select id="shopSort" aria-label="Trier">
+                <option value="newest">Nouveautés</option>
+                <option value="price-asc">Prix : croissant</option>
+                <option value="price-desc">Prix : décroissant</option>
+                <option value="name-asc">Nom : A-Z</option>
+            </select>
+            <select id="mobileGridSelector" class="mobile-only-control" aria-label="Affichage">
+                <option value="grid-cols-2" selected>Affichage : 2 par ligne</option>
+                <option value="grid-cols-1">Affichage : 1 par ligne</option>
+            </select>
+        </div>
+
+        <section class="products-section">
+            <div id="productGrid" class="product-grid"></div>
+        </section>
+        <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer">
+            </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+    </main>
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"><!-- À retirer lors de la fusion sur le site principal -->
+    <title>Mon Espace Client | Terra Ophis</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
+    <style>
+        .profile-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 50px;
+            margin-bottom: 80px;
+        }
+        .profile-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+        }
+        .profile-box h2 {
+            font-family: 'Young Serif', serif;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: var(--accent-brown);
+        }
+        .form-address {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .form-address input, .form-address select {
+            padding: 12px;
+            border: 1px solid rgba(74, 66, 56, 0.2);
+            border-radius: 6px;
+            font-family: inherit;
+        }
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .btn-logout-client {
+            background: transparent;
+            border: 1px solid #a35d5d;
+            color: #a35d5d;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-top: 15px;
+        }
+        @media (max-width: 768px) {
+            .profile-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+</head>
+<body class="beige-theme">
+
+    <nav class="navbar" id="main-navbar"></nav>
+
+    <main class="container">
+        <div class="profile-layout">
+            
+            <div class="profile-box">
+                <h2>Mes Informations</h2>
+                <div class="user-badge">
+                    <div style="background: #e0ddd5; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">👤</div>
+                    <div>
+                        <strong id="user-name" style="font-size: 1.1rem;">...</strong><br>
+                        <span id="user-email" style="color: #777; font-size: 0.9rem;">...</span>
+                    </div>
+                </div>
+
+                <h2>Adresse de livraison par défaut</h2>
+                <form id="addressForm" class="form-address">
+                    <input type="text" id="line1" placeholder="Adresse (N°, rue...)" required>
+                    <input type="text" id="line2" placeholder="Appartement, bâtiment, étage (Optionnel)">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+                        <input type="text" id="postalCode" placeholder="Code postal" required>
+                        <input type="text" id="city" placeholder="Ville" required>
+                    </div>
+                    <select id="country" required>
+                        <option value="FR">France</option>
+                        <option value="BE">Belgique</option>
+                        <option value="CH">Suisse</option>
+                        <option value="LU">Luxembourg</option>
+                    </select>
+                    <button type="submit" class="btn-buy">ENREGISTRER L'ADRESSE</button>
+                </form>
+
+                <button onclick="window.logoutCustomer()" class="btn-logout-client">Se déconnecter</button>
+                <div id="adminButtonContainer" style="margin-top: 15px;"></div>
+            </div>
+
+            <div class="profile-box">
+                <h2>Historique de mes commandes</h2>
+                <div id="ordersHistory">
+                    <p>Chargement de vos commandes...</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h2>Votre Panier</h2>
+            <button class="close-cart" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-items" id="cartItemsContainer">
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total (hors frais de port)</span>
+                <span id="cartTotalAmount">0.00 €</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="processCheckout()">VALIDER LA COMMANDE</button>
+        </div>
+    </div>
+    <footer id="main-footer"></footer>
+
+    <script type="module" src="app.js"></script>
+    <script type="module">
+        import { auth, db } from './firebase-config.js';
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = './'; 
+                return;
+            }
+
+            document.getElementById('user-name').textContent = user.displayName;
+            document.getElementById('user-email').textContent = user.email;
+
+            // Récupération de l'adresse enregistrée
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists() && userDoc.data().address) {
+                const addr = userDoc.data().address;
+                document.getElementById('line1').value = addr.line1 || '';
+                document.getElementById('line2').value = addr.line2 || '';
+                document.getElementById('postalCode').value = addr.postalCode || '';
+                document.getElementById('city').value = addr.city || '';
+                document.getElementById('country').value = addr.country || 'FR';
+            }
+
+            // NOUVEAU : Affichage du bouton admin pour les comptes autorisés
+            const adminContainer = document.getElementById('adminButtonContainer');
+            if (["martin.stuis11@gmail.com", "terra.ophis@gmail.com"].includes(user.email)) {
+                adminContainer.innerHTML = `<button onclick="window.location.href='admin/admin.html'" style="background: var(--accent-brown); color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; font-size: 0.8rem; width: 100%;">Accès Admin 🛡️</button>`;
+            } else {
+                adminContainer.innerHTML = '';
+            }
+
+            // Chargement de l'historique
+            loadCustomerOrders(user);
+        });
+
+        document.getElementById('addressForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const btn = e.target.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = 'Enregistrement... ⏳';
+
+            const address = {
+                line1: document.getElementById('line1').value,
+                line2: document.getElementById('line2').value,
+                postalCode: document.getElementById('postalCode').value,
+                city: document.getElementById('city').value,
+                country: document.getElementById('country').value
+            };
+
+            try {
+                await setDoc(doc(db, "users", user.uid), { address }, { merge: true });
+                alert("Adresse enregistrée avec succès ! 📦");
+            } catch (err) {
+                console.error(err);
+                alert("Erreur lors de l'enregistrement.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'ENREGISTRER L\'ADRESSE';
+            }
+        });
+
+        // L'historique passe par le serveur : les règles Firestore réservent la collection "orders" à l'admin
+        async function loadCustomerOrders(user) {
+            const container = document.getElementById('ordersHistory');
+            try {
+                const token = await user.getIdToken();
+                const res = await fetch('/api/my-orders', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Chargement impossible");
+                const { orders } = await res.json();
+
+                if (!orders || orders.length === 0) {
+                    container.innerHTML = '<p style="color: #777;">Vous n\'avez pas encore passé de commande.</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                for (const order of orders) {
+                    const date = order.createdAt ? new Date(order.createdAt).toLocaleDateString('fr-FR') : 'Inconnue';
+                    
+                    let itemsHtml = '';
+                    for (const item of (order.items || [])) {
+                        let name = item.name;
+                        if (!name) {
+                            const pSnap = await getDoc(doc(db, "products", item.id));
+                            name = pSnap.exists() ? pSnap.data().name : "Spécimen supprimé";
+                        }
+                        let lotText = '';
+                        if (typeof item.lotSize === 'string' && !/^\d+$/.test(item.lotSize)) lotText = ` (${item.lotSize})`;
+                        else if (Number(item.lotSize) > 1) lotText = ` (Lot de ${item.lotSize})`;
+                        const freeText = item.freeOption ? ` - ${item.freeOption}` : '';
+                        itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}${lotText}${freeText}</li>`;
+                    }
+
+                    let badgeColor = '#888';
+                    let badgeText = order.status || 'Inconnu';
+                    let payButtonHtml = '';
+                    
+                    if (badgeText === 'En attente de paiement') {
+                        badgeColor = '#e67e22'; 
+                        payButtonHtml = `<button onclick="window.resumePayment('${order.id}')" style="background: #4d5d30; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">Payer la commande</button>`;
+                    }
+                    else if (badgeText === 'Payé' || badgeText === 'En préparation') badgeColor = '#3498db'; 
+                    else if (badgeText === 'Expédié') {
+                        badgeColor = '#2ecc71';
+                        if (order.shippingMethod === 'retrait') badgeText = 'Prête au retrait';
+                    }
+                    else if (badgeText === 'Annulé') badgeColor = '#a35d5d';
+
+                    const trackingHtml = order.trackingNumber
+                        ? `<p style="margin: 0 0 10px; font-size: 0.85rem;">📮 Suivi : <a href="https://www.laposte.fr/outils/suivre-vos-envois?code=${encodeURIComponent(order.trackingNumber)}" target="_blank" style="color: #4d5d30; font-weight: 600;">${order.trackingNumber.replace(/[<>&"]/g, '')}</a></p>`
+                        : '';
+
+                    const div = document.createElement('div');
+                    div.style.cssText = "background: var(--primary-beige); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-light);";
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.85rem; color:#666; align-items: center; gap: 10px;">
+                            <span>Commande <strong>#${order.id.slice(0,6).toUpperCase()}</strong> du <strong>${date}</strong></span>
+                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px; white-space: nowrap;">${badgeText.toUpperCase()}</span>
+                        </div>
+                        <ul style="margin:0 0 15px 0; padding-left:20px; font-size:0.9rem; line-height:1.4;">${itemsHtml}</ul>
+                        ${trackingHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 10px;">
+                            <strong style="font-size:1rem; color: var(--accent-brown);">Total : ${Number(order.amountValue || 0).toFixed(2)} €</strong>
+                            ${payButtonHtml}
+                        </div>
+                    `;
+                    container.appendChild(div);
+                }
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<p>Erreur lors du chargement de l\'historique.</p>';
+            }
+        }
+
+        // NOUVEAU : Fonction pour rappeler l'API de paiement
+        window.resumePayment = async (orderId) => {
+            try {
+                const user = auth.currentUser;
+                const token = await user.getIdToken();
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ orderId })
+                });
+
+                const data = await response.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert(data.error || "Impossible de relancer le paiement.");
+                }
+            } catch (error) {
+                console.error("Erreur de reprise du paiement :", error);
+                alert("Une erreur de connexion est survenue.");
+            }
+        };
+        
+        window.logoutCustomer = () => {
+            signOut(auth).then(() => { window.location.href = './'; });
+        };
+    </script>
+</body>
+</html>

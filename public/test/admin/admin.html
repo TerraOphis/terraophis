@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"><!-- À retirer lors de la fusion sur le site principal -->
+    <title>Admin | Terraophis</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="contenu.css">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Young+Serif&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="../assets/img/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+</head>
+<body class="beige-theme admin-body">
+
+    <div id="adminLoader" style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--accent-brown);">
+        Vérification des droits d'accès... 🛡️
+    </div>
+
+    <nav class="admin-nav" id="adminNav" style="display: none;">
+        <div class="admin-nav-top">
+            <div class="logo">TERRAOPHIS <span class="logo-sub">PANEL ADMIN</span></div>
+
+            <div class="admin-nav-right">
+                <div id="adminWeatherWidget" class="weather-widget">
+                    <span id="adminWeatherIcon">⏳</span>
+                    <span id="adminWeatherTemp">Chargement météo...</span>
+                </div>
+                <a href="../" target="_blank" class="btn-outline btn-view-site" title="Ouvrir la boutique dans un nouvel onglet">Voir le site ↗</a>
+                <button id="btnLogout" class="btn-logout">Déconnexion</button>
+            </div>
+        </div>
+
+        <div class="admin-tabs">
+            <button class="tab-btn active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)">📊 Tableau de bord</button>
+            <button class="tab-btn" data-tab="tab-stocks" onclick="switchTab('tab-stocks', this)">🦗 Produits</button>
+            <button class="tab-btn" data-tab="tab-commandes" onclick="switchTab('tab-commandes', this)">📦 Commandes <span id="ordersTabBadge" class="tab-badge" style="display:none;"></span></button>
+            <button class="tab-btn" data-tab="tab-contenu" onclick="switchTab('tab-contenu', this)">✏️ Contenu du site</button>
+            <button class="tab-btn" data-tab="tab-affichage" onclick="switchTab('tab-affichage', this)">🖼️ Affichage</button>
+            <button class="tab-btn" data-tab="tab-categories" onclick="switchTab('tab-categories', this)">🗂️ Catégories</button>
+            <button class="tab-btn" data-tab="tab-guides" onclick="switchTab('tab-guides', this)">📖 Guides</button>
+            <button class="tab-btn" data-tab="tab-livraisons" onclick="switchTab('tab-livraisons', this)">🚚 Livraisons</button>
+        </div>
+    </nav>
+
+    <main class="admin-container" id="adminMain" style="display: none;">
+
+        <div id="tab-dashboard" class="tab-content">
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Chiffre d'affaires (mois en cours)</span>
+                    <span class="kpi-value" id="kpiRevenueMonth">–</span>
+                    <span class="kpi-sub" id="kpiRevenueSub"></span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToOrders('to-prepare')">
+                    <span class="kpi-label">Commandes à préparer</span>
+                    <span class="kpi-value" id="kpiToPrepare">–</span>
+                    <span class="kpi-sub">Payées ou en préparation</span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToProducts('out')">
+                    <span class="kpi-label">Articles en rupture</span>
+                    <span class="kpi-value" id="kpiOutOfStock">–</span>
+                    <span class="kpi-sub" id="kpiLowStockSub"></span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToProducts('hidden')">
+                    <span class="kpi-label">Articles masqués</span>
+                    <span class="kpi-value" id="kpiHidden">–</span>
+                    <span class="kpi-sub" id="kpiVisibleSub"></span>
+                </div>
+            </div>
+
+            <div class="dashboard-columns">
+                <section class="admin-section">
+                    <div class="section-header">
+                        <h2>À préparer</h2>
+                        <button class="btn-outline" onclick="goToOrders('to-prepare')">Toutes les commandes →</button>
+                    </div>
+                    <div id="dashboardOrders" class="dashboard-list"><p class="muted">Chargement...</p></div>
+                </section>
+                <section class="admin-section">
+                    <div class="section-header">
+                        <h2>Stock faible / rupture</h2>
+                        <button class="btn-outline" onclick="goToProducts('low')">Voir les produits →</button>
+                    </div>
+                    <div id="dashboardLowStock" class="dashboard-list"><p class="muted">Chargement...</p></div>
+                </section>
+            </div>
+        </div>
+        
+        <div id="tab-stocks" class="tab-content" style="display:none;">
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>Inventaire <span id="inventoryCount" class="count-pill"></span></h2>
+                    <button type="button" class="btn-buy btn-compact" onclick="toggleCreateProduct(true)">+ Nouveau produit</button>
+                </div>
+
+                <div class="toolbar">
+                    <input type="search" id="inventorySearch" placeholder="🔍 Rechercher (nom, nom latin...)">
+                    <select id="inventoryCategoryFilter"><option value="all">Toutes les catégories</option></select>
+                    <select id="inventoryStatusFilter">
+                        <option value="all">Tous les statuts</option>
+                        <option value="visible">Visibles sur la boutique</option>
+                        <option value="hidden">Masqués</option>
+                        <option value="low">Stock faible (≤ 5)</option>
+                        <option value="out">En rupture</option>
+                        <option value="promo">En promo</option>
+                    </select>
+                    <select id="inventorySort">
+                        <option value="newest">Plus récents</option>
+                        <option value="name">Nom A → Z</option>
+                        <option value="stock-asc">Stock croissant</option>
+                        <option value="stock-desc">Stock décroissant</option>
+                    </select>
+                </div>
+
+                <div id="adminInventory" class="inventory-list"></div>
+            </section>
+
+            <section class="admin-section" id="createProductSection" style="display:none;">
+                <div class="section-header">
+                    <h2>Ajouter un nouveau produit</h2>
+                    <button type="button" class="btn-outline" onclick="toggleCreateProduct(false)">Fermer</button>
+                </div>
+                <form id="productForm" class="product-form">
+                    <div class="form-group">
+                        <input type="text" name="name" placeholder="Nom commun (ex: Mante Orchidée)" required>
+                        <input type="text" name="latinName" placeholder="Nom latin (ex: Hymenopus coronatus)">
+                    </div>
+
+                    <div class="form-group">
+                        <select name="category" id="adminProductCategory" required onchange="window.generatePriceInputs('dynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'bundleBuilder'); if(window.toggleCustomOptions) window.toggleCustomOptions(this, 'customOptionsBuilder', 'dynamicPricesContainer');">
+                            <option value="" disabled selected>Chargement des catégories... ⏳</option>
+                        </select>
+                        <select name="difficulty">
+                            <option value="" disabled selected>Difficulté...</option>
+                            <option value="debutant">Débutant</option>
+                            <option value="intermediaire">Intermédiaire</option>
+                            <option value="expert">Expert</option>
+                        </select>
+                    </div>
+
+                    <div id="bundleBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Composition du Kit / Pack</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            
+                            <input type="text" id="bundleItemSearch" list="bundleDataList" placeholder="Rechercher un article... (ex: Cloporte)" style="flex: 1; min-width: 200px;">
+                            <datalist id="bundleDataList"></datalist>
+                            
+                            <input type="number" id="bundleItemQty" value="1" min="1" style="width: 70px; flex-grow: 0;" title="Nombre de fois cet article">
+                            <button type="button" onclick="window.addBundleItem('bundleItemSearch', 'bundleItemQty', 'bundleItemsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        
+                        </div>
+                        <ul id="bundleItemsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
+                    <div id="dynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
+
+                    <div id="customOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options personnalisées (ex: Dimensions, Contenances)</h4>
+                        <input type="text" id="customOptionName" placeholder="Nom de l'option (ex: Taille, Dimension)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="customOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <input type="number" id="customOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="customOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
+                    <div id="freeOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options supplémentaires gratuites (ex: Couleur, Forme)</h4>
+                        <input type="text" id="freeOptionName" placeholder="Nom de l'option (ex: Couleur)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="freeOptionValue" placeholder="Valeur (ex: Rouge, Bleu)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addFreeOption('freeOptionValue', 'freeOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="freeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
+                    <div id="matrixStockContainer" style="width: 100%;"></div>
+
+                    <div class="form-group">
+                        <label class="field">
+                            <span class="field-label">Quantité en stock</span>
+                            <input type="number" name="stock" placeholder="ex: 25" min="0" required>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Prix barré (€) — optionnel, affiche un badge PROMO</span>
+                            <input type="number" name="oldPrice" placeholder="ex: 39.90" step="0.01" min="0">
+                        </label>
+                    </div>
+                    <textarea name="description" placeholder="Description de l'espèce..." rows="4" required></textarea>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <span class="toolbar-separator"></span>
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" value="#000000" title="Couleur du texte" style="cursor: pointer; width: 25px; height: 25px; padding: 0; border: none; background: transparent;">
+                            <span class="toolbar-separator"></span>
+                            
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            <button type="button" onclick="window.unifyEditorText('productCareGuideEditor')" title="Unifier le style du texte" style="color: #4d5d30; font-weight: bold;">✨ Unifier</button>
+                        </div>
+                        <div id="productCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire (Infos d'élevage, paramètres...)"></div>
+                    </div>
+                    
+                    <div class="file-input-area">
+                        <label for="productFiles">Photos du produit (Max 5)</label>
+                        <input type="file" id="productFiles" multiple accept="image/*">
+                    </div>
+
+                    <label class="switch-row">
+                        <input type="checkbox" name="hidden" id="productHidden">
+                        <span><strong>Enregistrer comme brouillon (masqué)</strong><br><small>L'article ne sera pas visible sur la boutique tant que vous ne l'aurez pas rendu visible.</small></span>
+                    </label>
+
+                    <button type="submit" id="btnSubmit" class="btn-buy">PUBLIER LE PRODUIT</button>
+                    <p id="uploadStatus"></p>
+                </form>
+            </section>
+        </div>
+
+        <div id="tab-commandes" class="tab-content" style="display:none;">
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>Commandes <span id="ordersCount" class="count-pill"></span></h2>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="button" class="btn-outline" onclick="loadOrders()">↻ Actualiser</button>
+                        <button type="button" class="btn-outline" onclick="exportOrdersCsv()">⬇ Export CSV</button>
+                    </div>
+                </div>
+                <div class="toolbar">
+                    <input type="search" id="ordersSearch" placeholder="🔍 N° de commande, nom, e-mail, téléphone...">
+                </div>
+                <div class="filter-chips" id="ordersStatusChips">
+                    <button type="button" class="chip active" data-filter="all">Toutes</button>
+                    <button type="button" class="chip" data-filter="to-prepare">À préparer</button>
+                    <button type="button" class="chip" data-filter="En attente de paiement">En attente de paiement</button>
+                    <button type="button" class="chip" data-filter="Expédié">Expédiées</button>
+                    <button type="button" class="chip" data-filter="Annulé">Annulées</button>
+                </div>
+                <div id="adminOrders" class="inventory-list"></div>
+            </section>
+        </div>
+
+        <div id="tab-contenu" class="tab-content" style="display:none;">
+            <div id="cmsRoot"><p style="text-align:center;padding:40px;">Chargement de l'éditeur de contenu… ✏️</p></div>
+        </div>
+
+        <div id="tab-affichage" class="tab-content" style="display:none;">
+            <section class="admin-section">
+                <h2>Gestion du Hero Slider (Accueil)</h2>
+                <div id="sliderPreview" class="admin-img-preview-grid"></div>
+                <form id="sliderForm" class="product-form">
+                    <div class="file-input-area">
+                        <label for="sliderFiles">Ajouter des photos au slider (1920x800)</label>
+                        <input type="file" id="sliderFiles" multiple accept="image/*">
+                    </div>
+                    <button type="submit" id="btnSubmitSlider" class="btn-buy">AJOUTER AU SLIDER</button>
+                    <p id="sliderUploadStatus"></p>
+                </form>
+            </section>
+
+            <section class="admin-section">
+                <h2>Gestion de la Grille "Features" (Accueil)</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <div>
+                        <h3>Boutique (4 images max)</h3>
+                        <div id="boutiquePreview" class="admin-img-preview-grid mini"></div>
+                        <form id="boutiqueGridForm" class="product-form">
+                            <input type="file" id="boutiqueFiles" accept="image/*" required>
+                            <button type="submit" class="btn-buy" style="margin-top:10px;">AJOUTER UNE IMAGE</button>
+                            <p id="boutiqueUploadStatus"></p>
+                        </form>
+                    </div>
+                    <div>
+                        <h3>Conseils (4 images max)</h3>
+                        <div id="conseilPreview" class="admin-img-preview-grid mini"></div>
+                        <form id="conseilGridForm" class="product-form">
+                            <input type="file" id="conseilFiles" accept="image/*" required>
+                            <button type="submit" class="btn-buy" style="margin-top:10px;">AJOUTER UNE IMAGE</button>
+                            <p id="conseilUploadStatus"></p>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section">
+                <h2>Gestion de la page "À Propos" (Nouveau Layout)</h2>
+                <form id="aboutPageForm" class="product-form">
+                    
+                    <h3 style="color: var(--accent-brown); margin-bottom: 5px;">1. Introduction : Présentation de l'équipe</h3>
+                    <textarea id="aboutTopTeamText" placeholder="Texte de présentation générale de l'équipe (affiché en haut et en bas)..." rows="4" required></textarea>
+                    
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">2. Première Galerie d'images (Sous l'introduction)</h3>
+                    <div id="aboutTopGalleryPreview" class="admin-img-preview-grid"></div>
+                    <div class="file-input-area">
+                        <label for="aboutTopGalleryFiles">Ajouter des photos à la galerie haute</label>
+                        <input type="file" id="aboutTopGalleryFiles" multiple accept="image/*">
+                    </div>
+
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">3. Blocs Côte à Côte : Passion & Objectif</h3>
+                    <div class="form-group">
+                        <div>
+                            <label style="font-weight: 600; color: var(--accent-brown); display:block; margin-bottom:5px;">Une passion devenue projet</label>
+                            <textarea id="aboutPassionText" placeholder="Texte de la section Passion..." rows="6" required></textarea>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; color: var(--accent-brown); display:block; margin-bottom:5px;">Notre objectif</label>
+                            <textarea id="aboutObjectifText" placeholder="Texte de la section Objectif..." rows="6" required></textarea>
+                        </div>
+                    </div>
+                    
+                    <h3 style="color: var(--accent-brown); margin-top: 30px; margin-bottom: 5px;">4. Deuxième Galerie d'images (Sous le côte à côte)</h3>
+                    <div id="aboutBottomGalleryPreview" class="admin-img-preview-grid"></div>
+                    <div class="file-input-area">
+                        <label for="aboutBottomGalleryFiles">Ajouter des photos à la galerie basse</label>
+                        <input type="file" id="aboutBottomGalleryFiles" multiple accept="image/*">
+                    </div>
+
+                    <button type="submit" id="btnSubmitAbout" class="btn-buy" style="margin-top: 20px; width: 100%;">SAUVEGARDER LE CONTENU STRUCTUREL & GALERIES</button>
+                    <p id="aboutStatusMsg" style="text-align: center; font-weight: 500;"></p>
+                </form>
+
+                <hr style="border: none; border-top: 1px solid var(--border-light); margin: 40px 0;">
+
+                <h3 style="color: var(--accent-brown); margin-bottom: 15px;">5. Trombinoscope : Les membres de l'équipe</h3>
+                <div id="adminTeamList" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;"></div>
+                
+                <div style="background: #faf9f5; padding: 20px; border-radius: 8px; border: 1px solid var(--border-light);">
+                    <h4 style="margin-top: 0; color: var(--accent-brown);">Ajouter un membre à l'équipe</h4>
+                    <div class="form-group">
+                        <input type="text" id="newMemberName" placeholder="Prénom / Nom (ex: Franck)">
+                        <input type="text" id="newMemberRole" placeholder="Description courte (ex: Co-équipier)">
+                    </div>
+                    <div class="file-input-area" style="margin-top: 10px;">
+                        <label for="newMemberFile">Photo du membre</label>
+                        <input type="file" id="newMemberFile" accept="image/*">
+                    </div>
+                    <button type="button" onclick="addTeamMember()" id="btnAddMember" class="btn-buy" style="margin-top: 15px; padding: 10px 20px; font-size: 0.9rem;">AJOUTER CE MEMBRE</button>
+                </div>
+            </section>
+        </div>
+
+        <div id="tab-categories" class="tab-content" style="display:none;">
+            <section class="admin-section">
+                <h2>Créer une nouvelle catégorie</h2>
+                <form id="categoryForm" class="product-form">
+                    <div class="form-group">
+                        <input type="text" id="newCatId" placeholder="Identifiant unique URL (ex: isopodes, mantes)" required>
+                        <input type="text" id="newCatName" placeholder="Nom de la catégorie (ex: Isopodes, Mantes)" required>
+                    </div>
+                    <div class="form-group">
+                        <select id="newCatType" required>
+                            <option value="animaux">Animaux</option>
+                            <option value="materiels">Matériels & Accessoires</option>
+                            <option value="packs">Packs & Kits</option>
+                        </select>
+                        <input type="text" id="newCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
+                        <input type="number" id="newCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required title="Le lot qui sera affiché en évidence sur la boutique">
+                    </div>
+                    <button type="submit" class="btn-buy">AJOUTER LA CATÉGORIE</button>
+                </form>
+            </section>
+
+            <section class="admin-section">
+                <h2>Catégories configurées</h2>
+                <div id="adminCategoriesList" class="inventory-list"></div>
+            </section>
+        </div>
+
+        <div id="tab-guides" class="tab-content" style="display:none;">
+            <section class="admin-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <h2 style="margin: 0;">Affichage des guides sur le site</h2>
+                    <label style="display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent-brown); background: #f0eee7; padding: 10px 20px; border-radius: 8px;">
+                        <input type="checkbox" id="globalGuideToggle" style="width: 20px; height: 20px; margin-right: 10px; cursor: pointer;">
+                        Activer la section Conseils
+                    </label>
+                </div>
+                <p id="globalGuideStatus" style="font-size: 0.85rem; color: #6d8c6d; font-weight: bold; margin-top: 10px;"></p>
+            </section>
+
+            <section class="admin-section">
+                <h2>Rédiger une fiche conseil</h2>
+                <form id="guideForm" class="product-form">
+                    <input type="text" name="guideTitle" placeholder="Titre de la fiche" required>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h4>')" title="Petit titre">H4</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<p>')" title="Texte normal">P</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" value="#000000" title="Couleur du texte">
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('underline')" title="Souligné"><u>U</u></button>
+                            <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
+                            <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
+                            <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            <button type="button" onclick="triggerInlineImageUpload('guideCareEditor')" title="Insérer une image au curseur">🖼️ + Image</button>
+                            <input type="file" id="inlineImageInput_guideCareEditor" accept="image/*" style="display: none;" onchange="handleInlineImageUpload(this, 'guideCareEditor')">
+                        </div>
+                        <div id="guideCareEditor" class="editor-content" contenteditable="true" placeholder="Contenu de la fiche conseil..."></div>
+                    </div>
+
+                    <div class="file-input-area">
+                        <label for="guideFile">Image d'illustration principale (Couverture)</label>
+                        <input type="file" id="guideFile" accept="image/*">
+                    </div>
+                    <button type="submit" id="btnSubmitGuide" class="btn-buy">PUBLIER LA FICHE</button>
+                    <p id="guideUploadStatus"></p>
+                </form>
+            </section>
+
+            <section class="admin-section">
+                <h2>Fiches conseils existantes</h2>
+                <div id="adminGuides" class="inventory-list"></div>
+            </section>
+        </div>
+
+        <div id="tab-livraisons" class="tab-content" style="display: none;">
+            <section class="admin-section" style="margin-top: 30px; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <h2 style="font-family: 'Playfair Display', serif; color: var(--accent-brown); margin-bottom: 15px;">Configuration des Livraisons</h2>
+                <form id="shippingConfigForm" class="product-form">
+                    <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingColissimo" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Colissimo (€)</label>
+                            <input type="number" id="shippingColissimo" step="0.01" placeholder="ex: 8.90" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingChrono13" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Chrono 13 (€)</label>
+                            <input type="number" id="shippingChrono13" step="0.01" placeholder="ex: 14.90" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingThreshold" style="display: block; margin-bottom: 5px; font-weight: 600;">Seuil Livraison Gratuite (€)</label>
+                            <input type="number" id="shippingThreshold" step="0.01" placeholder="ex: 100.00" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="shippingHeatPack" style="display: block; margin-bottom: 5px; font-weight: 600;">Frais Chaufferette (€)</label>
+                            <input type="number" id="shippingHeatPack" step="0.01" placeholder="ex: 2.00" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-buy" style="width: auto; padding: 12px 25px;">ENREGISTRER LA CONFIGURATION</button>
+                </form>
+            </section>
+        </div>
+        
+        <div id="sliderModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeSliderModal()">&times;</span>
+                <h2>Modifier la slide</h2>
+                <form id="sliderModalForm" class="product-form">
+                    <input type="hidden" id="modalSlideIndex">
+                    <div class="form-group" style="flex-direction: column;">
+                        <label for="modalSlideText" style="font-weight: 600; font-size: 0.85rem;">Bandeau texte (Optionnel)</label>
+                        <input type="text" id="modalSlideText" placeholder="Ex: Nouvel arrivage d'isopodes !">
+                        
+                        <label for="modalSlideLink" style="font-weight: 600; font-size: 0.85rem; margin-top: 10px;">Lien au clic (Optionnel)</label>
+                        <input type="text" id="modalSlideLink" placeholder="Ex: /boutique.html?cat=isopodes">
+                    </div>
+                    <button type="submit" class="btn-buy" style="margin-top: 15px;">SAUVEGARDER LA SLIDE</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="editProductModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <span class="close-modal" onclick="closeEditModal()">&times;</span>
+                <h2>Modifier le produit</h2>
+                
+                <div id="editPhotosPreview" class="edit-photos-grid"></div>
+
+                <form id="editProductForm" class="product-form">
+                    <input type="hidden" id="editProductId">
+                    <div class="form-group">
+                        <input type="text" name="name" id="editName" placeholder="Nom commun" required>
+                        <input type="text" name="latinName" id="editLatinName" placeholder="Nom latin">
+                    </div>
+                    <div class="form-group">
+                        <select name="category" id="editCategory" required onchange="window.generatePriceInputs('editDynamicPricesContainer', this.value); if(window.toggleBundleBuilder) window.toggleBundleBuilder(this, 'editBundleBuilder'); if(window.toggleCustomOptions) window.toggleCustomOptions(this, 'editCustomOptionsBuilder', 'editDynamicPricesContainer');">
+                            </select>
+                        <select name="difficulty" id="editDifficulty">
+                            <option value="debutant">Débutant</option>
+                            <option value="intermediaire">Intermédiaire</option>
+                            <option value="expert">Expert</option>
+                        </select>
+                    </div>
+                    
+                    <div id="editDynamicPricesContainer" class="form-group" style="background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%;"></div>
+                    
+                    <div id="editCustomOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options personnalisées (ex: Dimensions, Contenances)</h4>
+                        <input type="text" id="editCustomOptionName" placeholder="Nom de l'option (ex: Taille, Dimension)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="editCustomOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <input type="number" id="editCustomOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="editCustomOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
+                    <div id="editFreeOptionsBuilder" style="display: none; background: #faf9f5; padding: 15px; border-radius: 8px; width: 100%; border: 1px dashed var(--accent-brown); box-sizing: border-box; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">Options supplémentaires gratuites (ex: Couleur, Forme)</h4>
+                        <input type="text" id="editFreeOptionName" placeholder="Nom de l'option (ex: Couleur)" style="margin-bottom: 10px; width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="editFreeOptionValue" placeholder="Valeur (ex: Rouge, Bleu)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
+                            <button type="button" onclick="window.addFreeOption('editFreeOptionValue', 'editFreeOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                        </div>
+                        <ul id="editFreeOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
+                    </div>
+
+                    <div id="editMatrixStockContainer" style="width: 100%;"></div>
+
+                    <div class="form-group">
+                        <label class="field">
+                            <span class="field-label">Quantité en stock</span>
+                            <input type="number" name="stock" id="editStock" placeholder="ex: 25" min="0">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Prix barré (€) — optionnel, affiche un badge PROMO</span>
+                            <input type="number" name="oldPrice" id="editOldPrice" placeholder="ex: 39.90" step="0.01" min="0">
+                        </label>
+                    </div>
+                    <textarea name="description" id="editDescription" placeholder="Description de l'espèce..." rows="4" required></textarea>
+
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <select onchange="formatDoc('fontName', this.value)" title="Police" style="padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; background: var(--white); cursor: pointer;">
+                                <option value="Montserrat, sans-serif">Montserrat</option>
+                                <option value="Playfair Display, serif">Playfair Display</option>
+                                <option value="Arial, sans-serif">Arial</option>
+                            </select>
+                            <select onchange="formatDoc('fontSize', this.value)" title="Taille" style="padding: 2px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem; background: var(--white); cursor: pointer;">
+                                <option value="1">Très petit</option>
+                                <option value="2">Petit</option>
+                                <option value="3" selected>Normal</option>
+                                <option value="4">Moyen</option>
+                                <option value="5">Grand</option>
+                                <option value="6">Très grand</option>
+                            </select>
+                            <span class="toolbar-separator"></span>
+
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <span class="toolbar-separator"></span>
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" value="#000000" title="Couleur du texte" style="cursor: pointer; width: 25px; height: 25px; padding: 0; border: none; background: transparent;">
+                            <span class="toolbar-separator"></span>
+                            
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+
+                            <span class="toolbar-separator"></span>
+                            <button type="button" onclick="window.unifyEditorText('editCareGuideEditor')" title="Unifier le style du texte" style="color: #4d5d30; font-weight: bold;">✨ Unifier</button>
+                        </div>
+                        <div id="editCareGuideEditor" class="editor-content" contenteditable="true" placeholder="Fiche complémentaire..."></div>
+                    </div>
+                    
+                    <div class="file-input-area">
+                        <label for="editProductFiles">Ajouter de nouvelles photos</label>
+                        <input type="file" id="editProductFiles" multiple accept="image/*">
+                    </div>
+                    <label class="switch-row">
+                        <input type="checkbox" name="hidden" id="editHidden">
+                        <span><strong>Article masqué sur la boutique</strong><br><small>Il reste dans l'inventaire mais n'apparaît plus aux clients et ne peut plus être commandé.</small></span>
+                    </label>
+
+                    <button type="submit" id="btnSubmitEdit" class="btn-buy">METTRE À JOUR LE PRODUIT</button>
+                    <p id="editUploadStatus" style="text-align: center; font-weight: 500;"></p>
+                </form>
+            </div>
+        </div>
+        <div id="editGuideModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <span class="close-modal" onclick="closeEditGuideModal()">&times;</span>
+                <h2>Modifier la fiche conseil</h2>
+                <form id="editGuideForm" class="product-form">
+                    <input type="hidden" id="editGuideId">
+                    <input type="text" id="editGuideTitle" name="guideTitle" placeholder="Titre de la fiche" required>
+                    
+                    <div class="editor-container">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="formatDoc('formatBlock', '<h2>')" title="Titre principal">H2</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h3>')" title="Sous-titre">H3</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<h4>')" title="Petit titre">H4</button>
+                            <button type="button" onclick="formatDoc('formatBlock', '<p>')" title="Texte normal">P</button>
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <input type="color" oninput="formatDoc('foreColor', this.value)" value="#000000" title="Couleur du texte">
+                            
+                            <span class="toolbar-separator"></span>
+                            
+                            <button type="button" onclick="formatDoc('bold')" title="Gras"><b>B</b></button>
+                            <button type="button" onclick="formatDoc('italic')" title="Italique"><i>I</i></button>
+                            <button type="button" onclick="formatDoc('underline')" title="Souligné"><u>U</u></button>
+                            <button type="button" onclick="formatDoc('justifyLeft')" title="Aligner à gauche">←</button>
+                            <button type="button" onclick="formatDoc('justifyCenter')" title="Centrer">↔</button>
+                            <button type="button" onclick="formatDoc('justifyRight')" title="Aligner à droite">→</button>
+                            <button type="button" onclick="formatDoc('insertUnorderedList')" title="Liste à puces">• Liste</button>
+                            
+                            <button type="button" onclick="triggerInlineImageUpload('editGuideCareEditor')" title="Insérer une image au curseur">🖼️ + Image</button>
+                            <input type="file" id="inlineImageInput_editGuideCareEditor" accept="image/*" style="display: none;" onchange="handleInlineImageUpload(this, 'editGuideCareEditor')">
+                        </div>
+                        <div id="editGuideCareEditor" class="editor-content" contenteditable="true" placeholder="Contenu du guide..."></div>
+                    </div>
+
+                    <div id="editGuideImagePreview" style="margin: 15px 0;"></div>
+
+                    <div class="file-input-area">
+                        <label for="editGuideFile">Changer l'image d'illustration principale (Couverture)</label>
+                        <input type="file" id="editGuideFile" accept="image/*">
+                    </div>
+                    <button type="submit" id="btnSubmitEditGuide" class="btn-buy">METTRE À JOUR LA FICHE</button>
+                    <p id="editGuideUploadStatus" style="text-align: center; font-weight: 500;"></p>
+                </form>
+            </div>
+        </div>
+
+        <div id="editCategoryModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width: 500px;">
+                <span class="close-modal" onclick="closeEditCategoryModal()">&times;</span>
+                <h2>Modifier la catégorie</h2>
+                <form id="editCategoryForm" class="product-form">
+                    <div class="form-group">
+                        <input type="text" id="editCatId" readonly title="L'identifiant URL ne peut pas être modifié pour ne pas casser les liens des articles existants." style="background: #f0f0f0; cursor: not-allowed; color: #888;">
+                        <input type="text" id="editCatName" placeholder="Nom de la catégorie" required>
+                    </div>
+                    <div class="form-group">
+                        <select id="editCatType" required>
+                            <option value="animaux">Animaux</option>
+                            <option value="materiels">Matériels & Accessoires</option>
+                            <option value="packs">Packs & Kits</option>
+                        </select>
+                        <input type="text" id="editCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
+                        <input type="number" id="editCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required>
+                    </div>
+                    <button type="submit" class="btn-buy">METTRE À JOUR LA CATÉGORIE</button> 
+                </form>
+            </div>
+        </div>
+
+</main>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <script type="module" src="admin.js?v=3"></script>
+    <script type="module" src="contenu.js"></script>
+</body>
+</html>

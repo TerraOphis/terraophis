@@ -1,0 +1,35 @@
+<div data-s="nav.menu" data-s-label="Menu" data-s-fixed="1" class="nav-container">
+    <div class="logo-area">
+        <a href="./" aria-label="Terra Ophis - Accueil">
+            <img src="assets/img/logo_rect.png" alt="Terra Ophis" class="main-logo">
+        </a>
+    </div>
+
+    <ul class="nav-links" id="nav-links">
+        <li><a data-c="nav.menu.01" href="./" id="nav-accueil">Accueil</a></li>
+        <li class="dropdown">
+            <a data-c="nav.menu.02" href="boutique">Boutique</a>
+            <ul class="dropdown-content">
+                <li class="dropdown-subtitle">Chargement du catalogue…</li>
+            </ul>
+        </li>
+        <li><a data-c="nav.menu.03" href="conseils">Conseils</a></li>
+        <li><a data-c="nav.menu.04" href="about">À propos</a></li>
+        <li class="nav-cta"><a data-c="nav.menu.05" href="#contact">Nous écrire</a></li>
+    </ul>
+
+    <div class="nav-icons">
+        <a href="https://www.instagram.com/terra.ophis" data-link="instagram" target="_blank" rel="noopener" class="nav-social" aria-label="Instagram">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>
+        </a>
+        <a href="connexion" id="nav-auth-btn">Connexion</a>
+        <a href="javascript:void(0);" onclick="toggleCart(true);" class="cart-icon" aria-label="Panier">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        </a>
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Menu" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </div>
+</div>
