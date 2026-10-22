@@ -1,0 +1,51 @@
+// Règles de sécurité Firestore pour Terraophis.
+// À copier dans la console Firebase > Firestore Database > Règles, puis "Publier".
+//
+// Commandes : réservées à l'admin. Elles sont créées et validées par le serveur
+// (firebase-admin ignore ces règles), ce qui empêche un client de lire les adresses
+// des autres acheteurs ou de fabriquer une commande avec un faux montant.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Fonction magique pour identifier les administrateurs
+    function isAdmin() {
+      return request.auth != null && (request.auth.token.email == "martin.stuis11@gmail.com" || request.auth.token.email == "terra.ophis@gmail.com");
+    }
+
+    match /categories/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Le catalogue et les paramètres publics : tout le monde lit, seul l'admin écrit
+    match /products/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /guides/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Profils utilisateurs : l'admin fait tout, le client gère uniquement le sien
+    match /users/{userId} {
+      allow read, write: if isAdmin() || request.auth.uid == userId;
+    }
+
+    // Commandes : créées par le serveur uniquement, gérées par l'admin
+    match /orders/{orderId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
