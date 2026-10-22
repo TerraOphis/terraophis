@@ -942,3 +942,26 @@ input:focus, select:focus, textarea:focus {
 
 .section-header .btn-buy { width: auto; }
 .quick-stock button { padding: 0 !important; }
+
+/* ---------- QR codes permanents ---------- */
+.qr-intro { color: #6b6156; line-height: 1.6; margin: 0 0 20px; }
+.qr-list { display: grid; gap: 18px; }
+.qr-row { display: grid; grid-template-columns: 170px 1fr; gap: 22px; padding: 18px; border: 1px solid var(--border-color); border-radius: 12px; background: #fdfcf8; }
+.qr-preview { width: 170px; height: 170px; display: grid; place-items: center; background: #fff; border-radius: 8px; border: 1px solid var(--border-color); font-size: 1.5rem; }
+.qr-preview svg { width: 100%; height: 100%; }
+.qr-fields label { display: block; font-size: .78rem; font-weight: 600; margin: 10px 0 4px; color: var(--accent-brown); }
+.qr-fields input, .qr-fields select, .qr-new-grid input { width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 8px; font: inherit; background: #fff; }
+.qr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.qr-scans { font-size: .78rem; font-weight: 700; background: #eef2e4; color: #4d5d30; padding: 3px 10px; border-radius: 999px; }
+.qr-short { font-size: .82rem; color: #6b6156; margin-top: 4px; }
+.qr-short code { background: #f1eddc; padding: 2px 6px; border-radius: 4px; }
+.qr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.qr-actions .btn-outline, .qr-actions .btn-logout, .qr-new .btn-outline { padding: 8px 14px; font-size: .82rem; cursor: pointer; text-decoration: none; }
+.qr-new { margin-top: 26px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
+.qr-new h3 { margin: 0 0 12px; font-size: 1.05rem; }
+.qr-new-grid { display: grid; grid-template-columns: 1fr 1.3fr 1.6fr auto; gap: 10px; }
+@media (max-width: 760px) {
+    .qr-row { grid-template-columns: 1fr; }
+    .qr-preview { margin: 0 auto; }
+    .qr-new-grid { grid-template-columns: 1fr; }
+}

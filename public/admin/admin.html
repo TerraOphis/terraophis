@@ -37,6 +37,7 @@
             <button class="tab-btn" data-tab="tab-categories" onclick="switchTab('tab-categories', this)">🗂️ Catégories</button>
             <button class="tab-btn" data-tab="tab-guides" onclick="switchTab('tab-guides', this)">📖 Guides</button>
             <button class="tab-btn" data-tab="tab-livraisons" onclick="switchTab('tab-livraisons', this)">🚚 Livraisons</button>
+            <button class="tab-btn" data-tab="tab-qrcodes" onclick="switchTab('tab-qrcodes', this)">🔳 QR codes</button>
         </div>
     </nav>
 
@@ -422,6 +423,10 @@
             </section>
         </div>
 
+        <div id="tab-qrcodes" class="tab-content" style="display:none;">
+            <div id="qrRoot"><p style="text-align:center;padding:40px;">Chargement des QR codes… 🔳</p></div>
+        </div>
+
         <div id="tab-livraisons" class="tab-content" style="display: none;">
             <section class="admin-section" style="margin-top: 30px; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                 <h2 style="font-family: 'Playfair Display', serif; color: var(--accent-brown); margin-bottom: 15px;">Configuration des Livraisons</h2>
@@ -648,6 +653,7 @@
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
+    <script type="module" src="qrcodes.js"></script>
     <script type="module" src="admin.js?v=3"></script>
 </body>
 </html>

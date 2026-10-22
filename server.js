@@ -501,8 +501,51 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 app.use(cors()); 
 app.use(express.json({ limit: '1mb' })); // <--- Le Webhook doit impérativement être au dessus de cette ligne
 
+// //////////////////////////////////////////////////
+// 🔳 QR CODES PERMANENTS
+// //////////////////////////////////////////////////
+// Les QR codes imprimés (cartes de visite...) pointent vers /qr/<code> : la destination
+// se change dans l'admin (settings/qrCodes) sans jamais réimprimer les cartes.
+const QR_DEFAULTS = {
+    ophis: 'https://terraophis.fr/',
+    mustela: 'https://www.instagram.com/terra.mustela/'
+};
+let qrCache = { links: null, at: 0 };
+
+async function getQrLinks() {
+    if (qrCache.links && Date.now() - qrCache.at < 60 * 1000) return qrCache.links;
+    const snap = await getFirestore().collection('settings').doc('qrCodes').get();
+    const links = { ...QR_DEFAULTS };
+    if (snap.exists) {
+        for (const [code, link] of Object.entries(snap.data().links || {})) {
+            if (link && /^https?:\/\//i.test(link.url || '')) links[code] = link.url;
+        }
+    }
+    qrCache = { links, at: Date.now() };
+    return links;
+}
+
+app.get('/qr/:code', async (req, res) => {
+    const code = String(req.params.code).toLowerCase();
+    let target = QR_DEFAULTS[code];
+    try {
+        target = (await getQrLinks())[code] || target;
+        // Compteur de scans, uniquement pour les codes existants (sans bloquer la redirection)
+        if (target) {
+            getFirestore().collection('settings').doc('qrStats')
+                .set({ [code]: FieldValue.increment(1) }, { merge: true })
+                .catch(err => console.error('Compteur QR :', err.message));
+        }
+    } catch (error) {
+        console.error('Lecture des QR codes :', error.message);
+    }
+    // Redirection temporaire : le navigateur ne la mémorise pas, la destination reste modifiable
+    res.set('Cache-Control', 'no-store');
+    res.redirect(302, target || '/');
+});
+
 // NOUVEAU : Fusion de la gestion des extensions HTML et de l'anti-cache
-app.use(express.static(path.join(__dirname, 'public'), { 
+app.use(express.static(path.join(__dirname, 'public'), {
     extensions: ['html'],
     setHeaders: function (res, path) {
         if (path.endsWith('.css') || path.endsWith('.js') || path.endsWith('.html')) {
