@@ -78,11 +78,13 @@ const verifyAdmin = async (req, res, next) => {
 let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log("🔑 Clé Firebase Admin chargée depuis la variable FIREBASE_SERVICE_ACCOUNT");
 } else {
     try {
         serviceAccount = require('./serviceAccountKey.json');
+        console.log(`🔑 Clé Firebase Admin chargée depuis ${path.join(__dirname, 'serviceAccountKey.json')}`);
     } catch (e) {
-        console.error("❌ Clé Firebase Admin introuvable : définissez FIREBASE_SERVICE_ACCOUNT ou déposez serviceAccountKey.json à la racine du serveur.");
+        console.error(`❌ Clé Firebase Admin introuvable : définissez FIREBASE_SERVICE_ACCOUNT ou déposez serviceAccountKey.json dans ${__dirname}`);
         process.exit(1);
     }
 }
