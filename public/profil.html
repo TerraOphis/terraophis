@@ -132,7 +132,7 @@
     <script type="module">
         import { auth, db } from './firebase-config.js';
         import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
@@ -156,14 +156,14 @@
 
             // NOUVEAU : Affichage du bouton admin pour les comptes autorisés
             const adminContainer = document.getElementById('adminButtonContainer');
-            if (user.email === "martin.stuis11@gmail.com" || user.email === "terra.ophis@gmail.com") {
+            if (["martin.stuis11@gmail.com", "terra.ophis@gmail.com"].includes(user.email)) {
                 adminContainer.innerHTML = `<button onclick="window.location.href='admin/admin.html'" style="background: var(--accent-brown); color: white; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 600; font-size: 0.8rem; width: 100%;">Accès Admin 🛡️</button>`;
             } else {
                 adminContainer.innerHTML = '';
             }
 
             // Chargement de l'historique
-            loadCustomerOrders(user.uid);
+            loadCustomerOrders(user);
         });
 
         document.getElementById('addressForm').addEventListener('submit', async (e) => {
@@ -195,54 +195,68 @@
             }
         });
 
-        async function loadCustomerOrders(uid) {
+        // L'historique passe par le serveur : les règles Firestore réservent la collection "orders" à l'admin
+        async function loadCustomerOrders(user) {
             const container = document.getElementById('ordersHistory');
             try {
-                const q = query(collection(db, "orders"), where("userId", "==", uid), orderBy("createdAt", "desc"));
-                const snap = await getDocs(q);
+                const token = await user.getIdToken();
+                const res = await fetch('/api/my-orders', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Chargement impossible");
+                const { orders } = await res.json();
 
-                if (snap.empty) {
+                if (!orders || orders.length === 0) {
                     container.innerHTML = '<p style="color: #777;">Vous n\'avez pas encore passé de commande.</p>';
                     return;
                 }
 
                 container.innerHTML = '';
-                for (const orderDoc of snap.docs) {
-                    const order = orderDoc.data();
-                    const date = order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('fr-FR') : 'Inconnue';
+                for (const order of orders) {
+                    const date = order.createdAt ? new Date(order.createdAt).toLocaleDateString('fr-FR') : 'Inconnue';
                     
                     let itemsHtml = '';
-                    if (order.items) {
-                        for (const item of order.items) {
+                    for (const item of (order.items || [])) {
+                        let name = item.name;
+                        if (!name) {
                             const pSnap = await getDoc(doc(db, "products", item.id));
-                            const name = pSnap.exists() ? pSnap.data().name : "Spécimen supprimé";
-                            const lotText = item.lotSize ? ` (Lot de ${item.lotSize})` : '';
-                            itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}${lotText}</li>`;
+                            name = pSnap.exists() ? pSnap.data().name : "Spécimen supprimé";
                         }
+                        let lotText = '';
+                        if (typeof item.lotSize === 'string' && !/^\d+$/.test(item.lotSize)) lotText = ` (${item.lotSize})`;
+                        else if (Number(item.lotSize) > 1) lotText = ` (Lot de ${item.lotSize})`;
+                        const freeText = item.freeOption ? ` - ${item.freeOption}` : '';
+                        itemsHtml += `<li><strong>x${item.quantity}</strong> - ${name}${lotText}${freeText}</li>`;
                     }
 
                     let badgeColor = '#888';
                     let badgeText = order.status || 'Inconnu';
-                    let payButtonHtml = ''; // NOUVEAU
+                    let payButtonHtml = '';
                     
                     if (badgeText === 'En attente de paiement') {
                         badgeColor = '#e67e22'; 
-                        // NOUVEAU : Bouton pour relancer Stripe
-                        payButtonHtml = `<button onclick="window.resumePayment('${orderDoc.id}')" style="background: #4d5d30; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">Payer la commande</button>`;
+                        payButtonHtml = `<button onclick="window.resumePayment('${order.id}')" style="background: #4d5d30; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">Payer la commande</button>`;
                     }
                     else if (badgeText === 'Payé' || badgeText === 'En préparation') badgeColor = '#3498db'; 
-                    else if (badgeText === 'Expédié') badgeColor = '#2ecc71'; 
+                    else if (badgeText === 'Expédié') {
+                        badgeColor = '#2ecc71';
+                        if (order.shippingMethod === 'retrait') badgeText = 'Prête au retrait';
+                    }
+                    else if (badgeText === 'Annulé') badgeColor = '#a35d5d';
+
+                    const trackingHtml = order.trackingNumber
+                        ? `<p style="margin: 0 0 10px; font-size: 0.85rem;">📮 Suivi : <a href="https://www.laposte.fr/outils/suivre-vos-envois?code=${encodeURIComponent(order.trackingNumber)}" target="_blank" style="color: #4d5d30; font-weight: 600;">${order.trackingNumber.replace(/[<>&"]/g, '')}</a></p>`
+                        : '';
 
                     const div = document.createElement('div');
                     div.style.cssText = "background: var(--primary-beige); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-light);";
                     div.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.85rem; color:#666; align-items: center;">
-                            <span>Commande du <strong>${date}</strong></span>
-                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px;">${badgeText.toUpperCase()}</span>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.85rem; color:#666; align-items: center; gap: 10px;">
+                            <span>Commande <strong>#${order.id.slice(0,6).toUpperCase()}</strong> du <strong>${date}</strong></span>
+                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px; white-space: nowrap;">${badgeText.toUpperCase()}</span>
                         </div>
                         <ul style="margin:0 0 15px 0; padding-left:20px; font-size:0.9rem; line-height:1.4;">${itemsHtml}</ul>
+                        ${trackingHtml}
                         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 10px;">
-                            <strong style="font-size:1rem; color: var(--accent-brown);">Total : ${order.amountValue ? order.amountValue.toFixed(2) : 0} €</strong>
+                            <strong style="font-size:1rem; color: var(--accent-brown);">Total : ${Number(order.amountValue || 0).toFixed(2)} €</strong>
                             ${payButtonHtml}
                         </div>
                     `;
@@ -258,13 +272,11 @@
         window.resumePayment = async (orderId) => {
             try {
                 const user = auth.currentUser;
+                const token = await user.getIdToken();
                 const response = await fetch('/api/create-checkout-session', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        orderId: orderId,
-                        userEmail: user.email
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ orderId })
                 });
 
                 const data = await response.json();
@@ -272,7 +284,7 @@
                 if (data.url) {
                     window.location.href = data.url;
                 } else {
-                    alert("Erreur lors de la création de la session : " + (data.error || "Inconnue"));
+                    alert(data.error || "Impossible de relancer le paiement.");
                 }
             } catch (error) {
                 console.error("Erreur de reprise du paiement :", error);

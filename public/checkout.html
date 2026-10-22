@@ -123,7 +123,7 @@
     <script type="module">
         import { auth, db } from './firebase-config.js';
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { doc, getDoc, collection, addDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // NOUVEAU : Mise à jour des tarifs
         let HEAT_PACK_COST = 2.00; 
@@ -169,56 +169,25 @@
             document.getElementById('chkTotal').textContent = (subtotal + currentShipping).toFixed(2) + ' €';
         };
         
-        // 2. ÉCOUTEURS POUR LE CHANGEMENT DE MODE
+        // Écouteur du mode de livraison : l'adresse est masquée pour le retrait sur place
         document.querySelectorAll('input[name="shippingMethod"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
-                const isRetrait = e.target.value === 'retrait';
                 const addressContainer = document.getElementById('addressFieldsContainer');
-                const alertBox = document.getElementById('inlineWeatherAlert');
-
-                if (isRetrait) {
-                    // En mode retrait, on peut masquer ou griser l'adresse
-                    addressContainer.style.opacity = '0.5';
-                    addressContainer.querySelectorAll('input, select').forEach(i => i.required = false);
-                    alertBox.style.display = 'none'; // Pas besoin d'alerte transport si retrait
+                const addressInputs = addressContainer.querySelectorAll('input, select');
+                if (e.target.value === 'retrait') {
+                    addressContainer.style.display = 'none';
+                    addressInputs.forEach(input => input.removeAttribute('required'));
+                    document.getElementById('inlineWeatherAlert').style.display = 'none';
                 } else {
-                    addressContainer.style.opacity = '1';
-                    addressContainer.querySelectorAll('input, select').forEach(i => {
-                        if(i.id !== 'chkLine2') i.required = true;
+                    addressContainer.style.display = 'flex';
+                    addressInputs.forEach(input => {
+                        if (input.id !== 'chkLine2') input.setAttribute('required', 'true');
                     });
-                    // On relance la météo si une ville est déjà là
                     if (document.getElementById('chkCity').value) window.checkWeather();
                 }
                 updateTotals();
             });
         });
-
-        // NOUVEAU : Écouteur pour masquer/afficher l'adresse selon la livraison
-        document.addEventListener('DOMContentLoaded', () => {
-            const shippingRadios = document.querySelectorAll('input[name="shippingMethod"]');
-            const addressContainer = document.getElementById('addressFieldsContainer');
-            const addressInputs = addressContainer.querySelectorAll('input, select');
-            
-            shippingRadios.forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    if (e.target.value === 'retrait') {
-                        addressContainer.style.display = 'none';
-                        addressInputs.forEach(input => input.removeAttribute('required'));
-                        document.getElementById('inlineWeatherAlert').style.display = 'none';
-                    } else {
-                        addressContainer.style.display = 'flex';
-                        addressInputs.forEach(input => {
-                            if (input.id !== 'chkLine2') input.setAttribute('required', 'true');
-                        });
-                        if (document.getElementById('chkCity').value) window.checkWeather();
-                    }
-                    updateTotals();
-                });
-            });
-        });
-        document.getElementById('chkCity').addEventListener('blur', window.checkWeather);
-        document.getElementById('chkCountry').addEventListener('change', window.checkWeather);
-        document.getElementById('chkPostal').addEventListener('blur', window.checkWeather);
 
         // NOUVEAU : Appel à l'API prévisions (forecast) ultra-précis basé sur le CODE POSTAL
         window.checkWeather = async () => {
@@ -314,6 +283,11 @@
             }
         };
 
+        // (Auparavant posés avant la définition de checkWeather : ils ne se déclenchaient jamais)
+        document.getElementById('chkCity').addEventListener('blur', () => window.checkWeather());
+        document.getElementById('chkCountry').addEventListener('change', () => window.checkWeather());
+        document.getElementById('chkPostal').addEventListener('blur', () => window.checkWeather());
+
         // NOUVEAU : Autocomplétion avec l'API Géo du gouvernement français
         const cityInput = document.getElementById('chkCity');
         const postalInput = document.getElementById('chkPostal');
@@ -333,7 +307,7 @@
 
             debounceTimer = setTimeout(async () => {
                 try {
-                    const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${query}&fields=codesPostaux,departement&boost=population&limit=5`);
+                    const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(query)}&fields=codesPostaux,departement&boost=population&limit=5`);
                     const data = await res.json();
 
                     if (data.length > 0) {
@@ -399,9 +373,8 @@
             }
 
             cart = JSON.parse(localStorage.getItem('terraophis_cart')) || [];
-            subtotal = parseFloat(localStorage.getItem('terraophis_cart_total') || 0);
 
-            if (cart.length === 0 || subtotal <= 0) {
+            if (cart.length === 0) {
                 window.location.href = '/';
                 return;
             }
@@ -428,11 +401,14 @@
             let html = '';
             let validCart = [];
 
+            subtotal = 0;
             for (let i = 0; i < cart.length; i++) {
                 if(cart[i].quantity <= 0) continue; 
-                validCart.push(cart[i]);
 
                 const pSnap = await getDoc(doc(db, "products", cart[i].id));
+                // Article supprimé ou masqué entre-temps : on le retire du récapitulatif
+                if (!pSnap.exists() || pSnap.data().hidden === true) continue;
+                validCart.push(cart[i]);
                     const name = pSnap.exists() ? pSnap.data().name : "Spécimen";
                     
                     const itemLot = cart[i].lotSize;
@@ -466,6 +442,7 @@
                     }
 
                     const itemTotal = itemPrice * cart[i].quantity;
+                    subtotal += itemTotal;
 
                     let oldPriceHtml = '';
                 if (pSnap.exists() && pSnap.data().oldPrice) {
@@ -486,6 +463,11 @@
                 cart = validCart;
                 localStorage.setItem('terraophis_cart', JSON.stringify(cart));
             }
+            if (cart.length === 0) {
+                alert("Les articles de votre panier ne sont plus disponibles 🌿");
+                window.location.href = '/boutique';
+                return;
+            }
 
             document.getElementById('chkSubtotal').textContent = subtotal.toFixed(2) + ' €';
             updateTotals(); 
@@ -499,15 +481,7 @@
             btn.textContent = 'CONNEXION SÉCURISÉE... ⏳';
 
             const user = auth.currentUser;
-            
             const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked').value;
-            let currentShipping = 0;
-            
-            if (shippingMethod === 'colissimo') currentShipping = subtotal >= freeShippingThreshold ? 0 : colissimoCost;
-            if (shippingMethod === 'chrono13') currentShipping = chronoCost;
-            if (isColdWeather && shippingMethod !== 'retrait') currentShipping += HEAT_PACK_COST;
-
-            const totalWithShipping = subtotal + currentShipping;
 
             const shippingAddress = shippingMethod === 'retrait' ? null : {
                 line1: document.getElementById('chkLine1').value,
@@ -522,28 +496,19 @@
                 if (shippingAddress) userUpdates.address = shippingAddress;
                 await setDoc(doc(db, "users", user.uid), userUpdates, { merge: true });
 
-                const orderRef = await addDoc(collection(db, "orders"), {
-                    userId: user.uid,
-                    customerEmail: user.email,
-                    customerName: document.getElementById('chkName').value,
-                    customerPhone: document.getElementById('chkPhone').value,
-                    items: cart,
-                    amountValue: totalWithShipping,
-                    shippingCost: currentShipping,
-                    shippingMethod: shippingMethod,
-                    status: 'En attente de paiement',
-                    shippingAddress: shippingAddress,
-                    hasHeatPack: (isColdWeather && shippingMethod !== 'retrait'),
-                    weatherWarning: (shippingMethod !== 'retrait') ? (isHotWeather ? 'Canicule' : (isColdWeather ? 'Grand Froid' : 'OK')) : 'OK',
-                    createdAt: serverTimestamp()
-                });
-
-                const response = await fetch('/api/create-checkout-session', {
+                // Le montant est recalculé côté serveur à partir des prix en base (impossible à falsifier)
+                const token = await user.getIdToken();
+                const response = await fetch('/api/checkout', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        orderId: orderRef.id,
-                        userEmail: user.email
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        items: cart.map(({ id, cartId, lotSize, freeOption, quantity }) => ({ id, cartId, lotSize, freeOption, quantity })),
+                        shippingMethod,
+                        customerName: document.getElementById('chkName').value,
+                        customerPhone: document.getElementById('chkPhone').value,
+                        shippingAddress,
+                        hasHeatPack: isColdWeather && shippingMethod !== 'retrait',
+                        weatherWarning: isHotWeather ? 'Canicule' : (isColdWeather ? 'Grand Froid' : 'OK')
                     })
                 });
 
@@ -557,7 +522,7 @@
 
             } catch (error) {
                 console.error("Erreur Checkout :", error);
-                alert("Une erreur est survenue.");
+                alert(error.message || "Une erreur est survenue.");
                 btn.disabled = false;
                 btn.textContent = 'PAYER MA COMMANDE';
             }

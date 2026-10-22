@@ -1,2 +1,5 @@
 node_modules/
 .env
+
+# Clé Firebase Admin : ne JAMAIS la commiter (utiliser FIREBASE_SERVICE_ACCOUNT ou un fichier déposé à la main sur le serveur)
+serviceAccountKey.json

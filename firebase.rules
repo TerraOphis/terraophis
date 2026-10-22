@@ -40,10 +40,11 @@ service cloud.firestore {
 
     // Profils utilisateurs : l'admin fait tout, le client gère uniquement le sien
     match /users/{userId} {
-      allow read, write: if isAdmin() || request.auth.uid == userId;
+      allow read, write: if isAdmin() || (request.auth != null && request.auth.uid == userId);
     }
 
-    // Commandes : créées par le serveur uniquement, gérées par l'admin
+    // Commandes : créées par le serveur uniquement (POST /api/checkout), gérées par l'admin.
+    // Le client consulte son historique via GET /api/my-orders.
     match /orders/{orderId} {
       allow read, write: if isAdmin();
     }

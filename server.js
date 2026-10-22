@@ -6,10 +6,12 @@ require('dotenv').config(); // Charge les variables du fichier .env
 const multer = require('multer');
 const sharp = require('sharp');
 const { S3Client, PutObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
-const crypto = require('crypto');
-const archiver = require('archiver');
+const path = require('path');
 const nodemailer = require('nodemailer');
-const admin = require('firebase-admin');
+// API modulaire de firebase-admin (v14+)
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const transporter = nodemailer.createTransport({
@@ -25,6 +27,27 @@ const transporter = nodemailer.createTransport({
 // //////////////////////////////////////////////////
 // 🛡️ MIDDLEWARE DE SÉCURITÉ ADMIN
 // //////////////////////////////////////////////////
+const ADMIN_EMAILS = ["martin.stuis11@gmail.com", "terra.ophis@gmail.com"];
+const ADMIN_NOTIFY_EMAIL = "terra.ophis@gmail.com";
+const SITE_URL = (process.env.CLIENT_URL || 'https://terraophis.fr').replace(/\/$/, '');
+
+// Échappement HTML pour les données client injectées dans les e-mails
+const escapeHtml = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Vérifie le token Firebase d'un client connecté (sans exiger les droits admin)
+const verifyUser = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Veuillez vous reconnecter." });
+    }
+    try {
+        req.user = await getAuth().verifyIdToken(authHeader.split('Bearer ')[1]);
+        next();
+    } catch (error) {
+        return res.status(401).json({ error: "Session expirée, veuillez vous reconnecter." });
+    }
+};
+
 const verifyAdmin = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -34,10 +57,10 @@ const verifyAdmin = async (req, res, next) => {
     const idToken = authHeader.split('Bearer ')[1];
 
     try {
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await getAuth().verifyIdToken(idToken);
         
         // Blocage si l'e-mail décodé n'appartient à aucun des deux administrateurs configurés
-        if (decodedToken.email !== "martin.stuis11@gmail.com" && decodedToken.email !== "terra.ophis@gmail.com") {
+        if (!ADMIN_EMAILS.includes(decodedToken.email)) {
             console.warn(`Tentative d'accès non autorisé par : ${decodedToken.email}`);
             return res.status(403).json({ error: "Accès interdit : Droits administrateur requis." });
         }
@@ -50,10 +73,21 @@ const verifyAdmin = async (req, res, next) => {
     }
 };
 
-// NOUVEAU : Initialisation Firebase Admin
-const serviceAccount = require('./serviceAccountKey.json');
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+// Initialisation Firebase Admin : la clé est lue depuis la variable d'environnement FIREBASE_SERVICE_ACCOUNT (JSON complet)
+// ou, à défaut, depuis le fichier serviceAccountKey.json (qui ne doit JAMAIS être commité, cf. .gitignore)
+let serviceAccount;
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+} else {
+    try {
+        serviceAccount = require('./serviceAccountKey.json');
+    } catch (e) {
+        console.error("❌ Clé Firebase Admin introuvable : définissez FIREBASE_SERVICE_ACCOUNT ou déposez serviceAccountKey.json à la racine du serveur.");
+        process.exit(1);
+    }
+}
+initializeApp({
+    credential: cert(serviceAccount)
 });
 
 // Configuration Cloudflare R2
@@ -73,64 +107,138 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// //////////////////////////////////////////////////
+// 💶 CALCUL DES PRIX CÔTÉ SERVEUR
+// Le navigateur n'est jamais la source de vérité pour un montant :
+// on recalcule tout depuis Firestore avant de créer la session Stripe.
+// //////////////////////////////////////////////////
+class OrderError extends Error {}
 
-// Route Webhook Stripe
-/*app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
+const SHIPPING_DEFAULTS = { colissimo: 8.90, chrono13: 14.90, threshold: 100, heatPack: 2.00 };
+const SHIPPING_METHODS = ['colissimo', 'chrono13', 'retrait'];
 
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error('Erreur de signature Webhook :', err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
+const round2 = (n) => Math.round(n * 100) / 100;
+
+const formatLot = (lotSize) => {
+    if (lotSize === null || lotSize === undefined || lotSize === '') return '';
+    if (typeof lotSize === 'string' && !/^\d+$/.test(lotSize)) return ` (Option : ${lotSize})`;
+    return parseInt(lotSize) > 1 ? ` (Lot de ${lotSize})` : '';
+};
+
+const buildItemsSummaryHtml = (items) => {
+    if (!Array.isArray(items) || items.length === 0) return '';
+    const rows = items.map(it => `
+        <tr>
+            <td style="padding: 6px 0; text-align: left;">x${it.quantity} ${escapeHtml(it.name || 'Article')}${escapeHtml(formatLot(it.lotSize))}${it.freeOption ? ' (+ ' + escapeHtml(it.freeOption) + ')' : ''}</td>
+            <td style="padding: 6px 0; text-align: right; white-space: nowrap;">${it.lineTotal !== undefined ? Number(it.lineTotal).toFixed(2) + ' €' : ''}</td>
+        </tr>`).join('');
+    return `<table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #4a4238; margin: 15px 0; border-top: 1px solid #e0ddd5; border-bottom: 1px solid #e0ddd5;">${rows}</table>`;
+};
+
+const getUnitPrice = (product, lotSize) => {
+    const variants = product.customOptions?.variants;
+    if (Array.isArray(variants) && variants.length > 0 && typeof lotSize === 'string' && !/^\d+$/.test(lotSize)) {
+        const variant = variants.find(v => v.label === lotSize);
+        return variant ? Number(variant.price) : NaN;
+    }
+    const lot = lotSize === null || lotSize === undefined ? 1 : parseInt(lotSize);
+    if (product.prices && Object.keys(product.prices).length > 0) {
+        return product.prices[lot] !== undefined ? Number(product.prices[lot]) : NaN;
+    }
+    // Rétrocompatibilité des anciens articles (price, price3, price5, price10)
+    const legacy = lot === 1 ? product.price : product[`price${lot}`];
+    return legacy !== undefined ? Number(legacy) : NaN;
+};
+
+// Recalcule chaque ligne du panier et vérifie la disponibilité réelle (visibilité + stock, packs inclus)
+async function priceOrder(rawItems, shippingMethod, hasHeatPack) {
+    const db = getFirestore();
+    if (!Array.isArray(rawItems) || rawItems.length === 0) throw new OrderError("Votre panier est vide.");
+    if (!SHIPPING_METHODS.includes(shippingMethod)) throw new OrderError("Mode de livraison invalide.");
+
+    const productIds = [...new Set(rawItems.map(i => String(i.id || '')))].filter(Boolean);
+    const snaps = await db.getAll(...productIds.map(id => db.collection('products').doc(id)));
+    const products = {};
+    snaps.forEach(snap => { if (snap.exists) products[snap.id] = snap.data(); });
+
+    // Chargement des composants des packs pour contrôler leur stock
+    const componentIds = new Set();
+    Object.values(products).forEach(p => (p.bundleItems || []).forEach(b => { if (!products[b.productId]) componentIds.add(b.productId); }));
+    if (componentIds.size > 0) {
+        const compSnaps = await db.getAll(...[...componentIds].map(id => db.collection('products').doc(id)));
+        compSnaps.forEach(snap => { if (snap.exists) products[snap.id] = snap.data(); });
     }
 
-    if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        const orderId = session.client_reference_id;
-        const amountPaidThisSession = session.amount_total / 100;
+    const lines = [];
+    const needs = {}; // clé de stock -> quantité requise
+    const addNeed = (key, qty) => { needs[key] = (needs[key] || 0) + qty; };
 
-        console.log(`✅ Paiement Stripe validé : ${orderId} (${amountPaidThisSession}€)`);
-
-        try {
-            const orderRef = admin.firestore().collection('orders').doc(orderId);
-            const orderSnap = await orderRef.get();
-            const orderData = orderSnap.data();
-
-            const currentAmountPaid = orderData.amountPaid || 0;
-            const updateObj = { amountPaid: currentAmountPaid + amountPaidThisSession };
-
-            const messageId = session.metadata ? session.metadata.messageId : null;
-            if (messageId) {
-                await orderRef.collection('messages').doc(messageId).update({ status: 'paid' });
-                
-                // NOUVEAU : On marque spécifiquement l'extra comme "payé" dans l'array extras
-                if (orderData.extras && orderData.extras.length > 0) {
-                    updateObj.extras = orderData.extras.map(ex => {
-                        if (ex.messageId === messageId) return { ...ex, isPaid: true };
-                        return ex;
-                    });
-                }
-            } else {
-                updateObj.status = 'Payé';
-                updateObj.paymentDate = admin.firestore.FieldValue.serverTimestamp();
-            }
-
-            await orderRef.update(updateObj);
-            
-            // On met à jour l'objet pour la fonction de nettoyage
-            if (updateObj.extras) orderData.extras = updateObj.extras;
-
-            // Appel de la fonction de nettoyage
-            await unlockOrderPhotos(orderId, orderData);
-
-        } catch(e) {
-            console.error("Erreur Webhook :", e);
+    for (const raw of rawItems) {
+        const quantity = parseInt(raw.quantity);
+        if (!(quantity > 0)) continue;
+        const product = products[raw.id];
+        if (!product || product.hidden) {
+            throw new OrderError(`L'article "${product?.name || 'inconnu'}" n'est plus disponible. Merci de le retirer de votre panier.`);
         }
+        const lotSize = raw.lotSize ?? null;
+        const freeOption = raw.freeOption || null;
+        const unitPrice = getUnitPrice(product, lotSize);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+            throw new OrderError(`Le prix de "${product.name}" a changé. Merci de le retirer puis de le rajouter au panier.`);
+        }
+
+        if (Array.isArray(product.bundleItems) && product.bundleItems.length > 0) {
+            product.bundleItems.forEach(b => addNeed(b.productId, quantity * (parseInt(b.qty) || 1) * (parseInt(b.lot) || 1)));
+        } else if (product.variantStocks && Object.keys(product.variantStocks).length > 0) {
+            addNeed(`${raw.id}::${freeOption ? `${lotSize}_${freeOption}` : lotSize}`, quantity);
+        } else {
+            const numericLot = /^\d+$/.test(String(lotSize)) ? parseInt(lotSize) : 1;
+            addNeed(raw.id, quantity * numericLot);
+        }
+
+        lines.push({
+            id: raw.id,
+            cartId: raw.cartId || raw.id,
+            name: product.name,
+            lotSize,
+            freeOption,
+            quantity,
+            unitPrice: round2(unitPrice),
+            lineTotal: round2(unitPrice * quantity)
+        });
     }
-    res.json({ received: true });
-});*/
+
+    if (lines.length === 0) throw new OrderError("Votre panier est vide.");
+
+    for (const [key, qty] of Object.entries(needs)) {
+        let available = 0;
+        let label = '';
+        if (key.includes('::')) {
+            const [pid, comb] = key.split('::');
+            available = parseInt(products[pid]?.variantStocks?.[comb]) || 0;
+            label = products[pid]?.name;
+        } else {
+            available = parseInt(products[key]?.stock) || 0;
+            label = products[key]?.name;
+        }
+        if (qty > available) throw new OrderError(`Stock insuffisant pour "${label || 'un article'}". Merci d'ajuster votre panier.`);
+    }
+
+    const subtotal = round2(lines.reduce((sum, l) => sum + l.lineTotal, 0));
+
+    const configSnap = await db.collection('config').doc('shipping').get();
+    const cfg = { ...SHIPPING_DEFAULTS, ...(configSnap.exists ? configSnap.data() : {}) };
+    let shippingCost = 0;
+    if (shippingMethod === 'colissimo') shippingCost = subtotal >= Number(cfg.threshold) ? 0 : Number(cfg.colissimo);
+    if (shippingMethod === 'chrono13') shippingCost = Number(cfg.chrono13);
+    if (hasHeatPack && shippingMethod !== 'retrait') shippingCost += Number(cfg.heatPack);
+    shippingCost = round2(shippingCost);
+
+    return { lines, subtotal, shippingCost, total: round2(subtotal + shippingCost) };
+}
+
+
+
 
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -151,7 +259,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         console.log(`✅ Paiement Stripe validé pour la commande : ${orderId} (${amountPaidThisSession}€)`);
 
         try {
-            const orderRef = admin.firestore().collection('orders').doc(orderId);
+            const orderRef = getFirestore().collection('orders').doc(orderId);
             
             const shipping = session.shipping_details;
             const customer = session.customer_details;
@@ -159,9 +267,10 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             const customerName = shipping?.name || customer?.name || 'Client';
             
             let weatherWarning = 'OK';
+            let orderItemsHtml = '';
 
             // NOUVEAU : Utilisation d'une "Transaction" Firestore.
-            await admin.firestore().runTransaction(async (transaction) => {
+            await getFirestore().runTransaction(async (transaction) => {
                 const orderSnap = await transaction.get(orderRef);
                 
                 if (!orderSnap.exists) {
@@ -170,6 +279,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 
                 const orderData = orderSnap.data();
                 weatherWarning = orderData.weatherWarning || 'OK';
+                orderItemsHtml = buildItemsSummaryHtml(orderData.items);
 
                 if (orderData.status !== 'En attente de paiement') {
                     throw new Error("ALREADY_PROCESSED");
@@ -183,7 +293,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     for (const item of orderData.items) {
                         productsToFetch.push({
                             id: item.id,
-                            ref: admin.firestore().collection('products').doc(item.id),
+                            ref: getFirestore().collection('products').doc(item.id),
                             quantity: item.quantity,
                             lotSize: item.lotSize || 1,
                             freeOption: item.freeOption || null // NOUVEAU : Récupération de l'option gratuite
@@ -207,7 +317,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
                                 if (!stockDeductions[subId]) {
                                     stockDeductions[subId] = {
-                                        ref: admin.firestore().collection('products').doc(subId),
+                                        ref: getFirestore().collection('products').doc(subId),
                                         isOption: false,
                                         amount: 0
                                     };
@@ -217,7 +327,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                         } else {
                             // NOUVEAU : Détection infaillible basée sur la présence réelle de la matrice
                             const hasVariants = prodData.variantStocks && Object.keys(prodData.variantStocks).length > 0;
-                            const qtyToDeduct = hasVariants ? p.quantity : (p.quantity * (p.lotSize || 1));
+                            // Un lot "texte" (ex: option 10cm) compte pour 1 unité, un lot numérique multiplie la quantité
+                            const numericLot = typeof p.lotSize === 'number' ? p.lotSize : (parseInt(p.lotSize) && /^\d+$/.test(String(p.lotSize)) ? parseInt(p.lotSize) : 1);
+                            const qtyToDeduct = hasVariants ? p.quantity : (p.quantity * numericLot);
                             
                             const dKey = hasVariants ? `${p.id}_${p.lotSize}_${p.freeOption}` : p.id;
 
@@ -247,14 +359,12 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     if (item.isOption) {
                         // C'est un accessoire : On retire uniquement dans la sous-clé de la matrice
                         const combKey = item.freeOption ? `${item.lotSize}_${item.freeOption}` : item.lotSize;
-                        transaction.update(item.ref, {
-                            // Firestore permet de cibler un sous-champ spécifique avec la notation pointée
-                            [`variantStocks.${combKey}`]: admin.firestore.FieldValue.increment(-item.amount)
-                        });
+                        // FieldPath évite les erreurs si le libellé contient un point (ex: "10.5cm")
+                        transaction.update(item.ref, new FieldPath('variantStocks', String(combKey)), FieldValue.increment(-item.amount));
                     } else {
                         // C'est un insecte classique : On retire dans le stock global
                         transaction.update(item.ref, {
-                            stock: admin.firestore.FieldValue.increment(-item.amount)
+                            stock: FieldValue.increment(-item.amount)
                         });
                     }
                 }
@@ -262,7 +372,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 const updatePayload = {
                     status: 'Payé',
                     amountPaid: amountPaidThisSession,
-                    paymentDate: admin.firestore.FieldValue.serverTimestamp(),
+                    paymentDate: FieldValue.serverTimestamp(),
                     customerEmail: customerEmail,
                     customerName: customerName
                 };
@@ -327,7 +437,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                                     <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Boutique d'Arthropodes & Insectes de collection</p>
                                 </div>
                                 <div style="padding: 35px; color: #4a4238; text-align: center;">
-                                    <h2 style="font-size: 20px; margin-top: 0; color: #4a4238; font-weight: 600;">Merci pour votre commande, ${customerName} !</h2>
+                                    <h2 style="font-size: 20px; margin-top: 0; color: #4a4238; font-weight: 600;">Merci pour votre commande, ${escapeHtml(customerName)} !</h2>
+
+                                    ${orderItemsHtml}
                                     <p style="font-size: 15px; line-height: 1.6; color: #555;">Nous vous confirmons la bonne validation de votre règlement de <strong>${amountPaidThisSession.toFixed(2)} €</strong> pour la commande <strong>#${orderId.slice(0,6).toUpperCase()}</strong>.</p>
                                     
                                     ${weatherAlertHtml}
@@ -359,10 +471,11 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                     html: `
                         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #fcf8f2; color: #4a4238; border-radius: 8px;">
                             <h2 style="color: #4d5d30; margin-top: 0;">Nouvelle commande reçue ! 🎉</h2>
-                            <p><strong>Client :</strong> ${customerName} (${customerEmail})</p>
+                            <p><strong>Client :</strong> ${escapeHtml(customerName)} (${escapeHtml(customerEmail)})</p>
                             <p><strong>Montant payé :</strong> ${amountPaidThisSession.toFixed(2)} €</p>
                             <p><strong>ID Commande :</strong> ${orderId}</p>
-                            <a href="https://terraophis.fr/admin.html" style="display:inline-block; padding:12px 24px; background:#4d5d30; color:#fff; text-decoration:none; border-radius:6px; margin-top:15px; font-weight: bold;">Accéder au panel Admin</a>
+                            ${orderItemsHtml}
+                            <a href="${SITE_URL}/admin/admin.html" style="display:inline-block; padding:12px 24px; background:#4d5d30; color:#fff; text-decoration:none; border-radius:6px; margin-top:15px; font-weight: bold;">Accéder au panel Admin</a>
                         </div>
                     `
                 };
@@ -382,46 +495,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 });
 
 
-// NOUVEAU : Retrait de verifyAdmin pour autoriser les clients à valider leur panier gratuit
-app.post('/api/free-order', async (req, res) => {
-    try {
-        const { orderId } = req.body;
-        if (!orderId) return res.status(400).json({ error: "orderId manquant" });
-
-        const orderRef = admin.firestore().collection('orders').doc(orderId);
-        const orderSnap = await orderRef.get();
-        if(!orderSnap.exists) return res.status(404).json({ error: "Commande introuvable" });
-        
-        const orderData = orderSnap.data();
-
-        // //////////////////////////////////////////////////
-        // NOUVEAU: Anti-hack de validation forcée
-        // //////////////////////////////////////////////////
-        if (orderData.amountValue > 0) {
-            return res.status(403).json({ error: "Cette commande n'est pas gratuite." });
-        }
-        // //////////////////////////////////////////////////
-
-        await orderRef.update({
-            status: 'Payé',
-            paymentDate: admin.firestore.FieldValue.serverTimestamp(),
-            amountPaid: 0
-        });
-
-        console.log(`✅ Commande 0€ (Crédits) validée : ${orderId}`);
-        await unlockOrderPhotos(orderId, orderData);
-
-        res.status(200).json({ message: "Commande validée avec succès" });
-    } catch (e) {
-        console.error("Erreur Free Order :", e);
-        res.status(500).json({ error: "Erreur serveur" });
-    }
-});
-
 // Tes Middlewares existants
 app.use(cors()); 
-app.use(express.json()); // <--- Le Webhook doit impérativement être au dessus de cette ligne
-const path = require('path');
+app.use(express.json({ limit: '1mb' })); // <--- Le Webhook doit impérativement être au dessus de cette ligne
 
 // NOUVEAU : Fusion de la gestion des extensions HTML et de l'anti-cache
 app.use(express.static(path.join(__dirname, 'public'), { 
@@ -439,15 +515,126 @@ app.get('/produit', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'produit.html'));
 });
 
-app.post('/api/create-checkout-session', async (req, res) => {
+// Construit et crée la session Stripe à partir d'une commande déjà tarifée
+async function createStripeSession(req, orderId, orderData, priced) {
+    let clientUrl = process.env.CLIENT_URL || req.headers.origin || 'http://localhost:3000';
+    if (clientUrl.endsWith('/')) clientUrl = clientUrl.slice(0, -1);
+
+    // Une ligne Stripe par article : le client retrouve le détail sur la page de paiement
+    const lineItems = priced.lines.map(line => ({
+        price_data: {
+            currency: 'eur',
+            product_data: { name: `${line.name}${formatLot(line.lotSize)}${line.freeOption ? ' (+ ' + line.freeOption + ')' : ''}` },
+            unit_amount: Math.round(line.unitPrice * 100)
+        },
+        quantity: line.quantity
+    })).filter(l => l.price_data.unit_amount > 0);
+
+    if (priced.shippingCost > 0) {
+        lineItems.push({
+            price_data: {
+                currency: 'eur',
+                product_data: { name: orderData.hasHeatPack ? 'Livraison + chaufferette' : 'Livraison' },
+                unit_amount: Math.round(priced.shippingCost * 100)
+            },
+            quantity: 1
+        });
+    }
+
+    if (lineItems.length === 0) throw new OrderError("Aucun montant à régler pour cette commande.");
+
+    const sessionConfig = {
+        payment_method_types: ['card'],
+        client_reference_id: String(orderId),
+        line_items: lineItems,
+        mode: 'payment',
+        success_url: `${clientUrl}/confirmation.html?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${clientUrl}/profil.html`,
+    };
+
+    // On collecte l'adresse Stripe UNIQUEMENT s'il y a expédition
+    if (orderData.shippingMethod !== 'retrait') {
+        sessionConfig.shipping_address_collection = { allowed_countries: ['FR', 'BE', 'CH', 'LU'] };
+    }
+    if (req.user.email) sessionConfig.customer_email = req.user.email;
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+    return session.url;
+}
+
+// Création d'une commande : faite par le serveur uniquement (cf. firebase.rules), avec des montants recalculés
+app.post('/api/checkout', verifyUser, async (req, res) => {
     try {
-        const { orderId, userEmail } = req.body;
+        const { items, shippingMethod, customerName, customerPhone, shippingAddress, hasHeatPack, weatherWarning } = req.body;
+        const heatPack = hasHeatPack === true && shippingMethod !== 'retrait';
+        const priced = await priceOrder(items, shippingMethod, heatPack);
+
+        const clean = (v, max = 200) => String(v ?? '').trim().slice(0, max);
+        const orderData = {
+            userId: req.user.uid,
+            customerEmail: req.user.email || '',
+            customerName: clean(customerName, 120) || req.user.name || 'Client',
+            customerPhone: clean(customerPhone, 30),
+            items: priced.lines,
+            subtotal: priced.subtotal,
+            shippingCost: priced.shippingCost,
+            amountValue: priced.total,
+            shippingMethod,
+            status: 'En attente de paiement',
+            shippingAddress: shippingMethod === 'retrait' || !shippingAddress ? null : {
+                line1: clean(shippingAddress.line1),
+                line2: clean(shippingAddress.line2),
+                postalCode: clean(shippingAddress.postalCode, 12),
+                city: clean(shippingAddress.city, 100),
+                country: clean(shippingAddress.country, 2)
+            },
+            hasHeatPack: heatPack,
+            weatherWarning: shippingMethod === 'retrait' ? 'OK' : (['Canicule', 'Grand Froid'].includes(weatherWarning) ? weatherWarning : 'OK'),
+            createdAt: FieldValue.serverTimestamp()
+        };
+
+        const orderRef = await getFirestore().collection('orders').add(orderData);
+        const url = await createStripeSession(req, orderRef.id, orderData, priced);
+        res.status(200).json({ url, orderId: orderRef.id });
+    } catch (error) {
+        if (error instanceof OrderError) return res.status(400).json({ error: error.message });
+        console.error("Erreur création commande :", error.message || error);
+        res.status(500).json({ error: "Impossible de créer la commande. Réessayez dans quelques instants." });
+    }
+});
+
+// Historique des commandes du client connecté (les règles Firestore lui interdisent la lecture directe)
+app.get('/api/my-orders', verifyUser, async (req, res) => {
+    try {
+        const snap = await getFirestore().collection('orders').where('userId', '==', req.user.uid).get();
+        const orders = snap.docs.map(d => {
+            const o = d.data();
+            return {
+                id: d.id,
+                status: o.status,
+                items: (o.items || []).map(i => ({ name: i.name || null, id: i.id, lotSize: i.lotSize ?? null, freeOption: i.freeOption || null, quantity: i.quantity })),
+                amountValue: o.amountValue || 0,
+                shippingMethod: o.shippingMethod,
+                trackingNumber: o.trackingNumber || null,
+                createdAt: o.createdAt ? o.createdAt.toMillis() : 0
+            };
+        }).sort((a, b) => b.createdAt - a.createdAt);
+        res.status(200).json({ orders });
+    } catch (error) {
+        console.error("Erreur historique commandes :", error);
+        res.status(500).json({ error: "Impossible de charger vos commandes." });
+    }
+});
+
+app.post('/api/create-checkout-session', verifyUser, async (req, res) => {
+    try {
+        const { orderId } = req.body;
 
         if (!orderId) {
             return res.status(400).json({ error: "Paramètre manquant (orderId)." });
         }
 
-        const orderRef = admin.firestore().collection('orders').doc(orderId);
+        const orderRef = getFirestore().collection('orders').doc(String(orderId));
         const orderSnap = await orderRef.get();
         
         if (!orderSnap.exists) {
@@ -455,61 +642,39 @@ app.post('/api/create-checkout-session', async (req, res) => {
         }
         
         const orderData = orderSnap.data();
-        const amountToPay = orderData.amountValue || 0;
-        
-        if (amountToPay <= 0) {
-            return res.status(400).json({ error: "Aucun montant à régler pour cette commande." });
+
+        // Seul le propriétaire de la commande peut la payer
+        if (orderData.userId !== req.user.uid) {
+            return res.status(403).json({ error: "Cette commande ne vous appartient pas." });
+        }
+        if (orderData.status !== 'En attente de paiement') {
+            return res.status(400).json({ error: "Cette commande a déjà été réglée ou annulée." });
         }
 
-        let clientUrl = process.env.CLIENT_URL || req.headers.origin || 'http://localhost:3000';
-        if (clientUrl.endsWith('/')) {
-            clientUrl = clientUrl.slice(0, -1);
-        }
+        // Recalcul complet du montant (prix, stock, visibilité, frais de port)
+        const priced = await priceOrder(orderData.items, orderData.shippingMethod, orderData.hasHeatPack === true);
 
-        const sessionConfig = {
-            payment_method_types: ['card'],
-            client_reference_id: String(orderId),
-            line_items: [
-                {
-                    price_data: {
-                        currency: 'eur',
-                        product_data: {
-                            name: `Commande Terraophis #${String(orderId).slice(0,6).toUpperCase()}`,
-                            description: 'Votre sélection d\'arthropodes et matériels d\'élevage'
-                        },
-                        unit_amount: Math.round(parseFloat(amountToPay) * 100), 
-                    },
-                    quantity: 1,
-                },
-            ],
-            mode: 'payment',
-            success_url: `${clientUrl}/confirmation.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${clientUrl}/`,
-        };
+        await orderRef.update({
+            items: priced.lines,
+            subtotal: priced.subtotal,
+            shippingCost: priced.shippingCost,
+            amountValue: priced.total
+        });
 
-        // NOUVEAU : On collecte l'adresse Stripe UNIQUEMENT s'il y a expédition
-        if (orderData.shippingMethod !== 'retrait') {
-            sessionConfig.shipping_address_collection = {
-                allowed_countries: ['FR', 'BE', 'CH', 'LU'],
-            };
-        }
-
-        if (userEmail) {
-            sessionConfig.customer_email = userEmail;
-        }
-
-        const session = await stripe.checkout.sessions.create(sessionConfig);
-
-        res.status(200).json({ url: session.url });
+        const url = await createStripeSession(req, orderId, orderData, priced);
+        res.status(200).json({ url });
     } catch (error) {
+        if (error instanceof OrderError) {
+            return res.status(400).json({ error: error.message });
+        }
         console.error("Erreur Stripe Checkout :", error.message || error);
-        res.status(500).json({ error: "Erreur Stripe : " + (error.message || "Impossible de créer la session de paiement.") });
+        res.status(500).json({ error: "Impossible de créer la session de paiement. Réessayez dans quelques instants." });
     }
 });
 
 // 4. Création d'une route de test
 app.get('/api/ping', (req, res) => {
-    res.send('API M2S Photo en ligne ! 🚀');
+    res.send('API Terraophis en ligne ! 🚀');
 });
 
 app.post('/api/upload', verifyAdmin, upload.array('photos', 5), async (req, res) => { 
@@ -573,8 +738,10 @@ app.post('/api/delete', verifyAdmin, async (req, res) => {
 // NOUVEAU : Route pour uploader un document PDF à une commande
 app.post('/api/upload-order-document', verifyAdmin, upload.single('document'), async (req, res) => {
     try {
-        const { orderId, fileName } = req.body;
+        const { orderId } = req.body;
         const file = req.file;
+        if (!orderId || !file) return res.status(400).json({ error: "Commande ou fichier manquant." });
+        const fileName = String(req.body.fileName || file.originalname || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
 
         // 1. Upload vers R2
         const key = `documents/${orderId}/${Date.now()}_${fileName}`;
@@ -588,9 +755,9 @@ app.post('/api/upload-order-document', verifyAdmin, upload.single('document'), a
         const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
 
         // 2. Mise à jour Firestore (on l'ajoute au tableau 'documents')
-        const orderRef = admin.firestore().collection('orders').doc(orderId);
+        const orderRef = getFirestore().collection('orders').doc(orderId);
         await orderRef.update({
-            documents: admin.firestore.FieldValue.arrayUnion({
+            documents: FieldValue.arrayUnion({
                 name: fileName,
                 url: publicUrl,
                 date: new Date().toISOString()
@@ -604,13 +771,15 @@ app.post('/api/upload-order-document', verifyAdmin, upload.single('document'), a
 });
 
 // NOUVEAU : Route pour l'envoi de l'e-mail de bienvenue
-app.post('/api/send-welcome-email', async (req, res) => {
+// Sécurisé : seul un utilisateur connecté peut déclencher l'e-mail, et uniquement vers sa propre adresse (anti-spam)
+app.post('/api/send-welcome-email', verifyUser, async (req, res) => {
     try {
-        const { email, name } = req.body;
+        const email = req.user.email;
+        const name = req.body.name || req.user.name;
         if (!email) return res.status(400).json({ error: "Email manquant" });
 
-        // NOUVEAU : On récupère uniquement le prénom pour un ton plus chaleureux
-        const firstName = name ? name.split(' ')[0] : 'passionné(e)';
+        // On récupère uniquement le prénom pour un ton plus chaleureux
+        const firstName = escapeHtml(name ? String(name).split(' ')[0] : 'passionné(e)');
 
         const welcomeHtml = `
             <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
@@ -694,7 +863,7 @@ app.post('/api/delete-user', verifyAdmin, async (req, res) => {
         const { uid } = req.body;
         if (!uid) return res.status(400).json({ error: "UID manquant" });
         
-        await admin.auth().deleteUser(uid);
+        await getAuth().deleteUser(uid);
         res.status(200).json({ message: "Utilisateur supprimé de Firebase Auth" });
     } catch (error) {
         console.error("Erreur suppression Auth :", error);
@@ -709,37 +878,32 @@ app.post('/api/custom-password-reset', async (req, res) => {
         if (!email) return res.status(400).json({ error: "Email manquant" });
 
         // 1. Demander à Firebase Admin de générer le lien brut sécurisé
-        const resetLink = await admin.auth().generatePasswordResetLink(email);
+        const resetLink = await getAuth().generatePasswordResetLink(email);
 
         // 2. Préparer le design de l'e-mail avec le lien intégré
         const resetEmailHTML = `
-        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #0a0a0a; padding: 40px 20px; color: #f5f5f5;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a; border-top: 4px solid #d4af37; border-radius: 8px; padding: 40px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;">
-                <img src="https://m2s-photo.fr/assets/img/logo.png" alt="M2S Photo" style="max-width: 150px; margin-bottom: 25px;">
-                <h2 style="color: #d4af37; margin-top: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">Modification du mot de passe</h2>
-                
-                <p style="color: #ccc; font-size: 16px; margin-bottom: 25px; line-height: 1.6;">
-                    Bonjour,<br>
-                    Nous avons reçu une demande de réinitialisation de mot de passe pour votre espace client associé à l'adresse <strong>${email}</strong>.
-                </p>
-
-                <a href="${resetLink}" style="display: inline-block; background-color: #d4af37; color: #000; padding: 15px 35px; text-decoration: none; font-weight: bold; border-radius: 4px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px;">Créer mon nouveau mot de passe</a>
-                
-                <p style="color: #888; font-size: 13px; line-height: 1.5;">
-                    Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail en toute sécurité. Votre mot de passe actuel restera actif.
-                </p>
+            <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden;">
+                    <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
+                        <img src="${SITE_URL}/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                        <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Votre espace client</p>
+                    </div>
+                    <div style="padding: 35px; color: #4a4238; text-align: center;">
+                        <h2 style="font-size: 20px; margin-top: 0; color: #4a4238; font-weight: 600;">Modification du mot de passe</h2>
+                        <p style="font-size: 15px; line-height: 1.6; color: #555;">Nous avons reçu une demande de réinitialisation du mot de passe associé à l'adresse <strong>${escapeHtml(email)}</strong>.</p>
+                        <a href="${resetLink}" style="display: inline-block; background-color: #4d5d30; color: #f9f8f2; text-decoration: none; padding: 14px 30px; border-radius: 8px; font-weight: 600; font-size: 14px; margin: 15px 0 25px;">Choisir un nouveau mot de passe</a>
+                        <p style="font-size: 13px; color: #888; line-height: 1.5;">Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail : votre mot de passe actuel reste actif.</p>
+                        <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">L'équipe Terraophis</p>
+                    </div>
+                </div>
             </div>
-            <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
-                <p>© M2S Photo - L'Art de l'Instant</p>
-            </div>
-        </div>
         `;
 
-        // 3. Envoyer l'e-mail via Hostinger SMTP
         const mailOptions = {
-            from: `"M2S Photo" <${process.env.SMTP_EMAIL}>`,
+            from: `"Terraophis" <terra.ophis@gmail.com>`,
             to: email,
-            subject: "Réinitialisation de votre mot de passe - M2S Photo",
+            subject: "Réinitialisation de votre mot de passe - Terraophis",
             html: resetEmailHTML
         };
 
@@ -754,13 +918,58 @@ app.post('/api/custom-password-reset', async (req, res) => {
     }
 });
 
+// Formulaire de contact du footer : transfère le message à la boutique (réponse directe possible via Reply-To)
+const contactRateLimit = new Map();
+app.post('/api/contact', async (req, res) => {
+    try {
+        const name = String(req.body.name || '').trim().slice(0, 100);
+        const email = String(req.body.email || '').trim().slice(0, 150);
+        const message = String(req.body.message || '').trim().slice(0, 5000);
+
+        if (!name || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: "Merci de remplir correctement tous les champs." });
+        }
+
+        // Anti-spam basique : 3 messages max par IP toutes les 10 minutes
+        const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+        const now = Date.now();
+        const recent = (contactRateLimit.get(ip) || []).filter(t => now - t < 10 * 60 * 1000);
+        if (recent.length >= 3) {
+            return res.status(429).json({ error: "Trop de messages envoyés. Réessayez dans quelques minutes." });
+        }
+        recent.push(now);
+        contactRateLimit.set(ip, recent);
+
+        await transporter.sendMail({
+            from: `"Terraophis (Contact)" <terra.ophis@gmail.com>`,
+            to: ADMIN_NOTIFY_EMAIL,
+            replyTo: email,
+            subject: `📩 Nouveau message de ${name}`,
+            html: `
+                <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #fcf8f2; color: #4a4238; border-radius: 8px;">
+                    <h2 style="color: #4d5d30; margin-top: 0;">Nouveau message via le site</h2>
+                    <p><strong>De :</strong> ${escapeHtml(name)} (${escapeHtml(email)})</p>
+                    <div style="background: #fff; border: 1px solid #e0ddd5; border-radius: 6px; padding: 15px; white-space: pre-wrap;">${escapeHtml(message)}</div>
+                    <p style="font-size: 12px; color: #888;">Répondez directement à cet e-mail pour écrire au client.</p>
+                </div>
+            `
+        });
+
+        res.status(200).json({ message: "Message envoyé" });
+    } catch (error) {
+        console.error("Erreur formulaire contact :", error);
+        res.status(500).json({ error: "Impossible d'envoyer le message pour le moment." });
+    }
+});
+
 // Nouvelle route pour supprimer un document spécifique d'une commande
 app.post('/api/delete-order-document', verifyAdmin, async (req, res) => {
     try {
-        const { orderId, docUrl, docIndex } = req.body;
+        const { orderId, docUrl } = req.body;
+        if (!orderId || !docUrl) return res.status(400).json({ error: "Paramètres manquants." });
         
-        // 1. Suppression physique sur R2 (on extrait la clé de l'URL)
-        const key = docUrl.split('.dev/')[1];
+        // 1. Suppression physique sur R2 (on extrait la clé depuis le chemin de l'URL)
+        const key = decodeURIComponent(new URL(docUrl).pathname.substring(1));
         if (key) {
             await s3.send(new DeleteObjectsCommand({
                 Bucket: process.env.R2_BUCKET_NAME,
@@ -769,7 +978,7 @@ app.post('/api/delete-order-document', verifyAdmin, async (req, res) => {
         }
 
         // 2. Mise à jour Firestore (on récupère le doc actuel pour filtrer)
-        const orderRef = admin.firestore().collection('orders').doc(orderId);
+        const orderRef = getFirestore().collection('orders').doc(orderId);
         const orderSnap = await orderRef.get();
         const docs = orderSnap.data().documents || [];
         

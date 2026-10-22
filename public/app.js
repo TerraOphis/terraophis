@@ -46,13 +46,11 @@ window.loginWithGoogle = async () => {
         // NOUVEAU : Si c'est une création de compte, on déclenche l'envoi de l'e-mail
         if (userInfo && userInfo.isNewUser) {
             try {
+                const token = await result.user.getIdToken();
                 await fetch('/api/send-welcome-email', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email: result.user.email, 
-                        name: result.user.displayName 
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ name: result.user.displayName })
                 });
             } catch (emailError) {
                 console.error("Erreur d'envoi de l'e-mail de bienvenue :", emailError);
@@ -134,6 +132,14 @@ async function loadCatalogue() {
         });
 
         // NOUVEAU : Ajout de l'index dans le forEach pour gérer le délai d'animation
+        // Les articles masqués depuis l'admin n'apparaissent pas dans la boutique
+        const visibleProducts = allProducts.filter(p => p.hidden !== true);
+
+        // Stock réellement disponible (matrice d'options incluse) et plus petit lot vendable
+        const getAvailableStock = (p) => (p.variantStocks && Object.keys(p.variantStocks).length > 0)
+            ? Object.values(p.variantStocks).reduce((sum, val) => sum + (parseInt(val) || 0), 0)
+            : (parseInt(p.stock) || 0);
+
         const renderProducts = (productsToDisplay) => {
             productGrid.innerHTML = ''; 
             if (productsToDisplay.length === 0) {
@@ -231,9 +237,6 @@ async function loadCatalogue() {
                 const btnAction = hasLots ? `window.location.href='/produit.html?id=${product.id}'` : `addToCart('${product.id}')`;
                 const btnText = hasLots ? 'VOIR LES OPTIONS' : 'AJOUTER AU PANIER';
                 
-                // Le badge "Bientôt épuisé" ne s'affiche que si on a moins de 10 MAIS assez pour acheter au moins un lot
-                const isLowStock = !isActuallyOutOfStock && product.stock <= 6;
-
                const card = document.createElement('div');
                 card.className = 'product-card';
                 // NOUVEAU : Animation d'apparition en cascade avec délai calculé sur l'index
@@ -258,7 +261,7 @@ async function loadCatalogue() {
         };
 
         const filterAndSort = () => {
-            let filtered = [...allProducts];
+            let filtered = [...visibleProducts];
             
             const selectedCat = categoryFilter?.value;
             if (selectedCat && selectedCat !== 'all') {
@@ -268,8 +271,8 @@ async function loadCatalogue() {
             const searchTerm = searchInput?.value.toLowerCase() || "";
             if (searchTerm) {
                 filtered = filtered.filter(p => 
-                    p.name.toLowerCase().includes(searchTerm) || 
-                    p.latinName.toLowerCase().includes(searchTerm)
+                    (p.name || '').toLowerCase().includes(searchTerm) || 
+                    (p.latinName || '').toLowerCase().includes(searchTerm)
                 );
             }
 
@@ -278,6 +281,7 @@ async function loadCatalogue() {
             // NOUVEAU : On repousse systématiquement les articles épuisés à la fin, avant d'appliquer le tri utilisateur
             filtered.sort((a, b) => {
                 const getMinLot = (p) => {
+                    if (p.customOptions?.variants?.length > 0 || p.isPack) return 1;
                     if (p.prices && Object.keys(p.prices).length > 0) return Math.min(...Object.keys(p.prices).map(Number));
                     if (p.price) return 1;
                     if (p.price3) return 3;
@@ -286,8 +290,8 @@ async function loadCatalogue() {
                     return 1;
                 };
 
-                const aEpuise = a.stock < getMinLot(a);
-                const bEpuise = b.stock < getMinLot(b);
+                const aEpuise = getAvailableStock(a) < getMinLot(a);
+                const bEpuise = getAvailableStock(b) < getMinLot(b);
 
                 // Si a est épuisé et pas b, a descend à la fin
                 if (aEpuise && !bEpuise) return 1;  
@@ -295,6 +299,7 @@ async function loadCatalogue() {
                 if (!aEpuise && bEpuise) return -1; 
 
                 const getPriceForSort = (p) => {
+                    if (p.customOptions?.variants?.length > 0) return Math.min(...p.customOptions.variants.map(v => Number(v.price)));
                     const cInfo = categoriesMap[p.category];
                     const pLot = cInfo ? cInfo.defaultDisplayLot : null;
 
@@ -375,7 +380,9 @@ async function loadProductDetails() {
         const docRef = doc(db, "products", productId);
         const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
+        if (docSnap.exists() && docSnap.data().hidden === true) {
+            detailsContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px;"><p style="font-family: \'Playfair Display\', serif; font-size: 1.5rem;">Cet article n\'est plus disponible pour le moment 🌿</p><a href="/boutique" class="btn-buy" style="display:inline-block; text-decoration:none; padding: 14px 30px; margin-top: 15px;">Découvrir la boutique</a></div>';
+        } else if (docSnap.exists()) {
             const product = docSnap.data();
             window.currentProductDetails = product; // NOUVEAU : Enregistrement global pour les calculs de changements d'options
             
@@ -625,6 +632,8 @@ async function validateCartStock(simulatedCart) {
         if(snap.exists()) productDefs[id] = snap.data();
     }
 
+    if (simulatedCart.some(item => !productDefs[item.id] || productDefs[item.id].hidden === true)) return false;
+
     for (const simItem of simulatedCart) {
         const def = productDefs[simItem.id];
         if (!def) continue;
@@ -790,10 +799,14 @@ window.renderCart = async () => {
                 
                 // NOUVEAU : Sécurisation du calcul de stock virtuel pour éviter les "NaN"
                 let maxStock = parseInt(p.stock) || 0;
-                if (p.bundleItems && p.bundleItems.length > 0) {
+                if (p.hidden === true) maxStock = 0; // Article masqué depuis l'admin : retiré du panier
+                else if (p.bundleItems && p.bundleItems.length > 0) {
                     let virtualStock = Infinity;
                     for (const bItem of p.bundleItems) {
-                        // ...
+                        const subSnap = await getDoc(doc(db, "products", bItem.productId));
+                        const subStock = subSnap.exists() ? (parseInt(subSnap.data().stock) || 0) : 0;
+                        const possiblePacks = Math.floor(subStock / ((parseInt(bItem.qty) || 1) * (parseInt(bItem.lot) || 1)));
+                        if (possiblePacks < virtualStock) virtualStock = possiblePacks;
                     }
                     maxStock = virtualStock === Infinity ? 0 : virtualStock;
                 }
@@ -853,7 +866,7 @@ window.renderCart = async () => {
                         <img src="${photo}" alt="${p.name}">
                         <div class="cart-item-details">
                             <button onclick="removeFromCart('${cart[i].cartId}')" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #a35d5d; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
-                            <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}</p>
+                            <p class="cart-item-title" style="padding-right: 20px; margin-bottom: 2px;">${p.name}${lotText}${freeOptText}</p>
                             <p class="cart-item-price">${oldPriceHtml}${Number(itemPrice).toFixed(2)} €</p>
                             <div class="cart-qty-controls">
                                 <button onclick="updateCartQty('${cart[i].cartId}', -1)">-</button>
@@ -1151,10 +1164,29 @@ async function loadFooter() {
         // Gestion de l'envoi du formulaire de contact
         const contactForm = document.getElementById('footer-contact-form');
         if (contactForm) {
-            contactForm.addEventListener('submit', (e) => {
+            contactForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                alert("Merci ! Votre message a bien été envoyé à terra.ophis@gmail.com");
-                contactForm.reset();
+                const btn = contactForm.querySelector('button[type="submit"]');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'ENVOI EN COURS... ⏳';
+                try {
+                    const formData = new FormData(contactForm);
+                    const res = await fetch('/api/contact', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: formData.get('name'), email: formData.get('email'), message: formData.get('message') })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.error || "Envoi impossible");
+                    alert("Merci ! Votre message a bien été envoyé, nous vous répondrons rapidement 🌿");
+                    contactForm.reset();
+                } catch (err) {
+                    alert(`Votre message n'a pas pu être envoyé (${err.message}). Vous pouvez nous écrire directement à terra.ophis@gmail.com`);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             });
         }
     } catch (error) {
@@ -1234,17 +1266,16 @@ async function loadGuidesList() {
             const cover = g.imageUrl || 'assets/img/placeholder.jpg';
             
             const card = document.createElement('div');
-                card.className = 'product-card';
-                card.innerHTML = `
-                    <a href="/produit.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
-                        ${badgeHtml}
-                        <img src="${photoUrl}" alt="${product.name}" class="product-image">
-                        <div class="product-info">
-                            <p class="product-latin">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
-                            <h3 class="product-name">${product.name}</h3>
-                            <p class="product-price">${oldPriceHtml}${basePrice} €${lotText}</p>
-                        </div>
+            card.className = 'product-card';
+            card.innerHTML = `
+                <a href="/guide.html?id=${docSnap.id}" style="text-decoration: none; color: inherit; display: block; position: relative;">
+                    <img src="${cover}" alt="${g.title}" class="product-image">
+                    <div class="product-info">
+                        <h3 class="product-name">${g.title}</h3>
+                        <p style="font-size: 0.85rem; color: #777; line-height: 1.5; margin: 8px 0 0;">${excerpt}</p>
+                    </div>
                 </a>
+                <a href="/guide.html?id=${docSnap.id}" class="btn-buy" style="display: block; text-align: center; text-decoration: none; width: 100%; box-sizing: border-box;">LIRE LA FICHE</a>
             `;
             grid.appendChild(card);
         });

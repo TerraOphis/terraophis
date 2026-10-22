@@ -5,6 +5,54 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 const productForm = document.getElementById('productForm');
 const statusMsg = document.getElementById('uploadStatus');
 
+const ADMIN_EMAILS = ["martin.stuis11@gmail.com", "terra.ophis@gmail.com"];
+const LOW_STOCK_THRESHOLD = 5;
+
+// Caches locaux pour filtrer/rechercher sans relire Firestore à chaque frappe
+let adminProducts = [];
+let adminOrders = [];
+let adminCategories = {};
+
+// Échappe les données saisies par les clients avant de les injecter dans le HTML (anti-XSS)
+const esc = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Notifications non bloquantes (remplacent les alert())
+window.notify = (message, type = null) => {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const text = String(message);
+    const kind = type || (/❌|erreur|impossible|échec/i.test(text) ? 'error' : 'success');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${kind}`;
+    toast.textContent = text;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, kind === 'error' ? 6000 : 3500);
+};
+const notify = window.notify;
+
+const formatEuro = (n) => `${Number(n || 0).toFixed(2)} €`;
+
+// Affiche/masque le champ stock global avec son libellé (inutile pour les packs et les articles à options)
+const setStockFieldVisible = (input, visible) => {
+    if (!input) return;
+    (input.closest('.field') || input).style.display = visible ? '' : 'none';
+    input.style.display = '';
+    input.required = visible;
+};
+
+const ORDER_STATUSES = [
+    { value: 'En attente de paiement', label: 'En attente de paiement', cls: 'status-pending' },
+    { value: 'Payé', label: 'Payé (à préparer)', cls: 'status-paid' },
+    { value: 'En préparation', label: 'En préparation', cls: 'status-preparing' },
+    { value: 'Expédié', label: 'Expédié / Prêt au retrait', cls: 'status-shipped' },
+    { value: 'Annulé', label: 'Annulé', cls: 'status-cancelled' }
+];
+const SHIPPING_LABELS = { colissimo: '🚚 Colissimo', chrono13: '🚀 Chrono 13', chrono18: '🚀 Chrono 18', retrait: '📦 Retrait sur place' };
+
 // --- SÉCURITÉ & AUTHENTIFICATION ---
 
 // NOUVEAU: Logique globale pour les Options Personnalisées et Gratuites combinées
@@ -180,8 +228,7 @@ window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
         
         // NOUVEAU : Rendre le stock global invisible et non obligatoire car la grille prend le relais
         if (stockInput) {
-            stockInput.style.display = 'none';
-            stockInput.required = false;
+            setStockFieldVisible(stockInput, false);
             stockInput.value = '';
         }
     } else {
@@ -190,10 +237,7 @@ window.toggleCustomOptions = (selectElement, builderId, pricesContainerId) => {
         if (freeBuilder) freeBuilder.style.display = 'none';
         
         // NOUVEAU : Réafficher et réimposer le stock global pour les articles classiques (ex: Animaux)
-        if (stockInput) {
-            stockInput.style.display = 'inline-block';
-            stockInput.required = true;
-        }
+        setStockFieldVisible(stockInput, true);
     }
 };
 
@@ -231,13 +275,13 @@ window.unifyEditorText = (editorId) => {
         block.parentNode.replaceChild(p, block);
     });
 
-    alert("Texte totalement nettoyé et réinitialisé ! ✨ Vous pouvez maintenant appliquer vos titres et gras proprement.");
+    notify("Texte totalement nettoyé et réinitialisé ! ✨ Vous pouvez maintenant appliquer vos titres et gras proprement.");
 };
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
         // L'utilisateur est connecté, on vérifie si c'est l'un des bons emails
-        if (user.email === "martin.stuis11@gmail.com" || user.email === "terra.ophis@gmail.com") {
+        if (ADMIN_EMAILS.includes(user.email)) {
             console.log("Accès Admin accordé :", user.email);
             
             // NOUVEAU : On lève le rideau de fer uniquement si l'accès est validé
@@ -245,6 +289,7 @@ onAuthStateChanged(auth, (user) => {
             document.getElementById('adminNav').style.display = 'flex';
             document.getElementById('adminMain').style.display = 'block';
 
+            restoreTabFromHash();
             loadAdminCategories();
             loadInventory(); 
             loadOrders();
@@ -253,7 +298,7 @@ onAuthStateChanged(auth, (user) => {
             loadGridPreviews();
             loadGuides();
             loadAdminWeather();
-            loadAboutPageAdmin()
+            loadAboutPageAdmin();
             loadGlobalGuideToggle();
         } else {
             console.warn("Accès refusé pour :", user.email);
@@ -351,14 +396,15 @@ productForm.addEventListener('submit', async (e) => {
             careGuide: careGuideHtml,
             prices: prices,
             photos: photoUrls,
+            hidden: document.getElementById('productHidden').checked,
             createdAt: serverTimestamp()
         };
 
         await addDoc(collection(db, "products"), productData);
         statusMsg.textContent = "✅ Produit ajouté avec succès !";
+        notify(productData.hidden ? "✅ Produit enregistré en brouillon (masqué)" : "✅ Produit publié sur la boutique !");
 
-        productForm.reset();
-        document.getElementById('productCareGuideEditor').innerHTML = ''; 
+        resetCreateProductForm();
         loadInventory();
     } catch (err) {
         console.error(err);
@@ -367,6 +413,32 @@ productForm.addEventListener('submit', async (e) => {
         btn.disabled = false;
     }
 });
+
+// Remet le formulaire de création dans son état initial (y compris packs, options et grille de stock)
+function resetCreateProductForm() {
+    productForm.reset();
+    document.getElementById('productCareGuideEditor').innerHTML = '';
+    window.currentBundleItems = [];
+    window.currentCustomOptions = { name: "", variants: [] };
+    window.currentFreeOptions = { name: "", values: [] };
+    window.currentVariantStocks = {};
+    ['bundleItemsList', 'customOptionsList', 'freeOptionsList', 'matrixStockContainer', 'dynamicPricesContainer'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    ['bundleBuilder', 'customOptionsBuilder', 'freeOptionsBuilder'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    const stockInput = document.querySelector('#productForm input[name="stock"]');
+    setStockFieldVisible(stockInput, true);
+}
+
+window.toggleCreateProduct = (show) => {
+    const section = document.getElementById('createProductSection');
+    section.style.display = show ? 'block' : 'none';
+    if (show) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 window.editProduct = async (id) => {
     try {
@@ -387,6 +459,7 @@ window.editProduct = async (id) => {
             if (document.getElementById('editDifficulty')) document.getElementById('editDifficulty').value = p.difficulty || '';
             if (document.getElementById('editDescription')) document.getElementById('editDescription').value = p.description || '';
             if (document.getElementById('editCareGuideEditor')) document.getElementById('editCareGuideEditor').innerHTML = p.careGuide || '';
+            document.getElementById('editHidden').checked = p.hidden === true;
             
             await generatePriceInputs('editDynamicPricesContainer', p.category, p.prices || {
                 "1": p.price, "3": p.price3, "5": p.price5, "10": p.price10
@@ -403,8 +476,7 @@ window.editProduct = async (id) => {
                 
                 // NOUVEAU : Masquage et désactivation stricte du champ editStock si options présentes
                 if (editStockInput) {
-                    editStockInput.style.display = 'none';
-                    editStockInput.required = false;
+                    setStockFieldVisible(editStockInput, false);
                     editStockInput.value = '';
                 }
             } else {
@@ -414,11 +486,9 @@ window.editProduct = async (id) => {
                 // NOUVEAU : Gestion de l'affichage du stock pour les produits simples ou packs
                 if (editStockInput) {
                     if (p.bundleItems && p.bundleItems.length > 0) {
-                        editStockInput.style.display = 'none';
-                        editStockInput.required = false;
+                        setStockFieldVisible(editStockInput, false);
                     } else {
-                        editStockInput.style.display = 'inline-block';
-                        editStockInput.required = true;
+                        setStockFieldVisible(editStockInput, true);
                         editStockInput.value = p.stock || 0;
                     }
                 }
@@ -443,7 +513,7 @@ window.editProduct = async (id) => {
         }
     } catch (error) {
         console.error("Erreur de chargement :", error);
-        alert("Impossible de charger le produit.");
+        notify("Impossible de charger le produit.");
     }
 };
 
@@ -526,7 +596,7 @@ window.deleteProductPhoto = async (productId, photoIndex, photoUrl) => {
         
     } catch (error) {
         console.error("Erreur lors de la suppression de l'image :", error);
-        alert("Erreur lors de la suppression de l'image.");
+        notify("Erreur lors de la suppression de l'image.");
     }
 };
 
@@ -554,7 +624,7 @@ window.moveProductPhoto = async (productId, index, direction) => {
         }
     } catch (error) {
         console.error("Erreur lors de la réorganisation :", error);
-        alert("Erreur lors de la réorganisation des photos.");
+        notify("Erreur lors de la réorganisation des photos.");
     }
 };
 
@@ -629,8 +699,7 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             if (val !== "") cleanVariantStocksEdit[key] = parseInt(val);
         }
 
-        const editBundleBuilder = document.getElementById('editBundleBuilder');
-        const isPack = editBundleBuilder && editBundleBuilder.style.display === 'block';
+        const isPack = docSnap.exists() && Array.isArray(docSnap.data().bundleItems) && docSnap.data().bundleItems.length > 0;
         const finalStock = isPack ? 0 : (formData.get('stock') ? parseInt(formData.get('stock')) : 0);
 
         await updateDoc(docRef, {
@@ -646,10 +715,12 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
             customOptions: customOptsEdit, 
             freeOptions: freeOptsEdit,
             variantStocks: cleanVariantStocksEdit, // NOUVEAU : Enregistrement de la matrice mise à jour
-            photos: finalPhotos
+            photos: finalPhotos,
+            hidden: document.getElementById('editHidden').checked
         });
 
         statusText.textContent = "✅ Produit mis à jour !";
+        notify("✅ Produit mis à jour !");
         loadInventory();
         setTimeout(() => closeEditModal(), 1500);
 
@@ -661,92 +732,211 @@ document.getElementById('editProductForm').addEventListener('submit', async (e) 
     }
 });
 
+// Calcule les infos d'affichage (stock réel, packs, matrice) d'un produit
+function computeProductStock(p, all) {
+    let stock = parseInt(p.stock) || 0;
+    let isPack = false;
+    let isMatrix = false;
+    if (Array.isArray(p.bundleItems) && p.bundleItems.length > 0) {
+        isPack = true;
+        let virtualStock = Infinity;
+        p.bundleItems.forEach(bItem => {
+            const sub = all.find(x => x.id === bItem.productId);
+            const possible = sub ? Math.floor((parseInt(sub.stock) || 0) / ((parseInt(bItem.qty) || 1) * (parseInt(bItem.lot) || 1))) : 0;
+            if (possible < virtualStock) virtualStock = possible;
+        });
+        stock = virtualStock === Infinity ? 0 : virtualStock;
+    } else if (p.variantStocks && Object.keys(p.variantStocks).length > 0) {
+        isMatrix = true;
+        stock = Object.values(p.variantStocks).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+    }
+    // Un article vendu uniquement par lots est en rupture si on ne peut plus servir le plus petit lot
+    let minLot = 1;
+    if (!isPack && !isMatrix && p.prices && Object.keys(p.prices).length > 0) {
+        minLot = Math.min(...Object.keys(p.prices).map(Number).filter(n => !isNaN(n))) || 1;
+    }
+    return { stock, isPack, isMatrix, isOut: stock < minLot, isLow: stock >= minLot && stock <= LOW_STOCK_THRESHOLD };
+}
+
 async function loadInventory() {
     const container = document.getElementById('adminInventory');
-    container.innerHTML = '<p>Chargement des stocks...</p>';
+    if (!adminProducts.length) container.innerHTML = '<p class="muted">Chargement des stocks...</p>';
     
-    const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-    const snap = await getDocs(q);
-    
-    const allProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    try {
+        const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        all.forEach(p => { p._stock = computeProductStock(p, all); });
+        adminProducts = all;
+        renderInventory();
+        renderDashboard();
+    } catch (error) {
+        console.error("Erreur chargement inventaire :", error);
+        container.innerHTML = '<p>❌ Erreur lors du chargement de l\'inventaire.</p>';
+    }
+}
 
-    allProducts.forEach(p => {
-        if (p.bundleItems && p.bundleItems.length > 0) {
-            let virtualStock = Infinity;
-            p.bundleItems.forEach(bItem => {
-                const subProduct = allProducts.find(sub => sub.id === bItem.productId);
-                if (subProduct) {
-                    const possiblePacks = Math.floor(subProduct.stock / (bItem.qty * bItem.lot));
-                    if (possiblePacks < virtualStock) virtualStock = possiblePacks;
-                } else {
-                    virtualStock = 0;
-                }
-            });
-            p.stock = virtualStock === Infinity ? 0 : virtualStock;
-            p.isPack = true;
-        }
+function getPriceSummary(p) {
+    if (p.customOptions?.variants?.length > 0) {
+        const prices = p.customOptions.variants.map(v => Number(v.price));
+        return `<span>${p.customOptions.variants.length} options</span><br><span class="muted">dès ${formatEuro(Math.min(...prices))}</span>`;
+    }
+    if (p.prices && Object.keys(p.prices).length > 0) {
+        return Object.entries(p.prices)
+            .sort((a, b) => Number(a[0]) - Number(b[0]))
+            .map(([lot, pr]) => `<span>${Number(lot) === 1 ? 'Unité' : 'Lot x' + lot} : <strong>${formatEuro(pr)}</strong></span>`).join('<br>');
+    }
+    const lots = [];
+    if (p.price) lots.push(`Unité : <strong>${formatEuro(p.price)}</strong>`);
+    if (p.price3) lots.push(`Lot x3 : <strong>${formatEuro(p.price3)}</strong>`);
+    if (p.price5) lots.push(`Lot x5 : <strong>${formatEuro(p.price5)}</strong>`);
+    if (p.price10) lots.push(`Lot x10 : <strong>${formatEuro(p.price10)}</strong>`);
+    return lots.length > 0 ? lots.join('<br>') : '<strong>-</strong>';
+}
+
+function renderInventory() {
+    const container = document.getElementById('adminInventory');
+    if (!container) return;
+
+    const search = (document.getElementById('inventorySearch')?.value || '').trim().toLowerCase();
+    const cat = document.getElementById('inventoryCategoryFilter')?.value || 'all';
+    const status = document.getElementById('inventoryStatusFilter')?.value || 'all';
+    const sort = document.getElementById('inventorySort')?.value || 'newest';
+
+    let list = adminProducts.filter(p => {
+        if (search && !`${p.name || ''} ${p.latinName || ''}`.toLowerCase().includes(search)) return false;
+        if (cat !== 'all' && p.category !== cat) return false;
+        if (status === 'visible' && p.hidden) return false;
+        if (status === 'hidden' && !p.hidden) return false;
+        if (status === 'low' && !(p._stock.isLow || p._stock.isOut)) return false;
+        if (status === 'out' && !p._stock.isOut) return false;
+        if (status === 'promo' && !p.oldPrice) return false;
+        return true;
     });
 
-    container.innerHTML = '';
-    allProducts.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'inventory-item';
-        
-        // NOUVEAU : Calcul dynamique du stock global si le produit utilise une matrice
-        let displayStock = p.stock || 0;
-        let isMatrix = false;
-        
-        if (p.variantStocks && Object.keys(p.variantStocks).length > 0) {
-            displayStock = Object.values(p.variantStocks).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
-            isMatrix = true;
-        }
+    if (sort === 'name') list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    if (sort === 'stock-asc') list.sort((a, b) => a._stock.stock - b._stock.stock);
+    if (sort === 'stock-desc') list.sort((a, b) => b._stock.stock - a._stock.stock);
 
-        let stockClass = "stock-out";
-        let stockText = p.isPack ? "Rupture (Composants)" : "Rupture";
-        
-        // NOUVEAU : Utilisation du displayStock calculé
-        if (displayStock > 10) {
-            stockClass = "stock-high";
-            stockText = p.isPack ? `${displayStock} packs possibles` : (isMatrix ? `${displayStock} en stock (Options)` : `${displayStock} en stock`);
-        } else if (displayStock > 0) {
-            stockClass = "stock-low";
-            stockText = p.isPack ? `Max ${displayStock} packs` : (isMatrix ? `Reste ${displayStock} (Options)` : `Reste ${displayStock}`);
-        }
-        
-        let priceContent = '';
-        if (p.prices && Object.keys(p.prices).length > 0) {
-            priceContent = Object.entries(p.prices).map(([lot, pr]) => `<span>Lot x${lot}: ${pr} €</span>`).join('<br>');
-        } else {
-            let lots = [];
-            if (p.price) lots.push(`Unité: ${p.price} €`);
-            if (p.price3) lots.push(`Lot x3: ${p.price3} €`);
-            if (p.price5) lots.push(`Lot x5: ${p.price5} €`);
-            if (p.price10) lots.push(`Lot x10: ${p.price10} €`);
-            priceContent = lots.length > 0 ? lots.join('<br>') : '<strong>-</strong>';
-        }
+    const countEl = document.getElementById('inventoryCount');
+    if (countEl) countEl.textContent = list.length === adminProducts.length ? `${adminProducts.length}` : `${list.length} / ${adminProducts.length}`;
 
+    if (list.length === 0) {
+        container.innerHTML = '<p class="muted" style="text-align:center; padding: 20px;">Aucun produit ne correspond à ces filtres.</p>';
+        return;
+    }
+
+    container.innerHTML = list.map(p => {
+        const { stock, isPack, isMatrix, isOut, isLow } = p._stock;
+        let stockClass = 'stock-high';
+        let stockText = isPack ? `${stock} packs possibles` : (isMatrix ? `${stock} en stock (options)` : `${stock} en stock`);
+        if (isOut) { stockClass = 'stock-out'; stockText = isPack ? 'Rupture (composants)' : 'Rupture'; }
+        else if (isLow) { stockClass = 'stock-low'; stockText = isPack ? `Max ${stock} packs` : `Reste ${stock}`; }
+
+        // Stock modifiable directement depuis la liste pour les articles simples
+        const quickStock = (!isPack && !isMatrix) ? `
+            <div class="quick-stock" title="Modifier le stock rapidement">
+                <button type="button" onclick="adjustStock('${p.id}', -1)" aria-label="Retirer 1">−</button>
+                <input type="number" min="0" value="${parseInt(p.stock) || 0}" onchange="setStock('${p.id}', this.value)" aria-label="Stock">
+                <button type="button" onclick="adjustStock('${p.id}', 1)" aria-label="Ajouter 1">+</button>
+            </div>` : '';
+
+        const catName = adminCategories[p.category]?.name || p.category || '—';
         const firstPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : '../assets/img/placeholder.jpg';
-        
-        div.innerHTML = `
-            <img src="${firstPhoto}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
-            <div style="display:flex; flex-direction:column; gap:5px;">
-                <span style="font-weight:600; font-size:1.1rem;">${p.name} ${p.isPack ? '📦' : ''}</span>
-                <span style="font-size:0.85rem; color:#888; text-transform:capitalize;">${p.category} | ${p.latinName || 'N/A'}</span>
-            </div>
-            <div>
-                ${priceContent}
-            </div>
-            <div>
-                <span class="stock-badge ${stockClass}">${stockText}</span>
-            </div>
-            <div style="display:flex; gap:10px; justify-content:flex-end;">
-                <button onclick="editProduct('${p.id}')" class="btn-outline">Gérer</button>
-                <button onclick="deleteProduct('${p.id}')" class="btn-logout" style="border:none;">Supprimer</button>
+
+        return `
+            <div class="inventory-item product-row ${p.hidden ? 'is-hidden' : ''}">
+                <img src="${esc(firstPhoto)}" class="inventory-thumb" alt="">
+                <div class="inv-main">
+                    <span class="inv-name">${esc(p.name)} ${isPack ? '📦' : ''}</span>
+                    <span class="inv-meta">${esc(catName)}${p.latinName ? ' · <em>' + esc(p.latinName) + '</em>' : ''}</span>
+                    <div class="inv-tags">
+                        ${p.hidden ? '<span class="tag tag-hidden">Masqué</span>' : '<span class="tag tag-visible">En ligne</span>'}
+                        ${p.oldPrice ? `<span class="tag tag-promo">Promo (barré ${formatEuro(p.oldPrice)})</span>` : ''}
+                    </div>
+                </div>
+                <div class="inv-prices">${getPriceSummary(p)}</div>
+                <div class="inv-stock">
+                    <span class="stock-badge ${stockClass}">${stockText}</span>
+                    ${quickStock}
+                </div>
+                <div class="inv-actions">
+                    <button onclick="toggleProductVisibility('${p.id}')" class="btn-icon" title="${p.hidden ? 'Afficher sur la boutique' : 'Masquer de la boutique'}">${p.hidden ? '👁️ Afficher' : '🙈 Masquer'}</button>
+                    <button onclick="editProduct('${p.id}')" class="btn-outline">Gérer</button>
+                    <button onclick="duplicateProduct('${p.id}')" class="btn-icon" title="Dupliquer ce produit (créé en brouillon)">⧉</button>
+                    <a href="/produit.html?id=${p.id}" target="_blank" class="btn-icon" title="Voir la fiche produit">↗</a>
+                    <button onclick="deleteProduct('${p.id}')" class="btn-icon btn-icon-danger" title="Supprimer définitivement">🗑</button>
+                </div>
             </div>
         `;
-        container.appendChild(div);
-    });
+    }).join('');
 }
+
+['inventorySearch', 'inventoryCategoryFilter', 'inventoryStatusFilter', 'inventorySort'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(id === 'inventorySearch' ? 'input' : 'change', renderInventory);
+});
+
+// Masquer / afficher un produit sur la boutique en un clic
+window.toggleProductVisibility = async (id) => {
+    const p = adminProducts.find(x => x.id === id);
+    if (!p) return;
+    const hidden = !p.hidden;
+    try {
+        await updateDoc(doc(db, "products", id), { hidden });
+        p.hidden = hidden;
+        renderInventory();
+        renderDashboard();
+        notify(hidden ? `🙈 "${p.name}" est masqué de la boutique` : `👁️ "${p.name}" est de nouveau visible`);
+    } catch (error) {
+        console.error(error);
+        notify("❌ Impossible de modifier la visibilité.");
+    }
+};
+
+window.setStock = async (id, value) => {
+    const p = adminProducts.find(x => x.id === id);
+    const newStock = Math.max(0, parseInt(value) || 0);
+    try {
+        await updateDoc(doc(db, "products", id), { stock: newStock });
+        p.stock = newStock;
+        adminProducts.forEach(x => { x._stock = computeProductStock(x, adminProducts); });
+        renderInventory();
+        renderDashboard();
+        notify(`Stock de "${p.name}" : ${newStock}`);
+    } catch (error) {
+        console.error(error);
+        notify("❌ Erreur lors de la mise à jour du stock.");
+    }
+};
+
+window.adjustStock = (id, delta) => {
+    const p = adminProducts.find(x => x.id === id);
+    if (p) window.setStock(id, (parseInt(p.stock) || 0) + delta);
+};
+
+// Duplique un produit (pratique pour une variante ou une espèce proche). La copie est créée masquée.
+window.duplicateProduct = async (id) => {
+    const p = adminProducts.find(x => x.id === id);
+    if (!p || !confirm(`Dupliquer "${p.name}" ? La copie sera créée masquée pour que vous puissiez l'ajuster.`)) return;
+    try {
+        const { id: _id, _stock, createdAt, ...data } = p;
+        await addDoc(collection(db, "products"), { ...data, name: `${p.name} (copie)`, hidden: true, createdAt: serverTimestamp() });
+        notify(`⧉ "${p.name}" dupliqué (en brouillon)`);
+        loadInventory();
+    } catch (error) {
+        console.error(error);
+        notify("❌ Impossible de dupliquer le produit.");
+    }
+};
+
+window.goToProducts = (statusFilter) => {
+    const btn = document.querySelector('.tab-btn[data-tab="tab-stocks"]');
+    switchTab('tab-stocks', btn);
+    const select = document.getElementById('inventoryStatusFilter');
+    if (select) select.value = statusFilter;
+    renderInventory();
+};
 
 window.deleteProduct = async (id) => {
     if(confirm("Êtes-vous sûr de vouloir supprimer définitivement cet insecte et ses photos ?")) {
@@ -759,8 +949,11 @@ window.deleteProduct = async (id) => {
                 const product = docSnap.data();
                 
                 // NOUVEAU : Extraction des clés R2 et appel de l'API de suppression
-                if (product.photos && product.photos.length > 0) {
-                    const keys = product.photos.map(url => {
+ // On ne supprime pas les photos encore utilisées par un autre produit (ex: produit dupliqué)
+                const sharedPhotos = new Set(adminProducts.filter(x => x.id !== id).flatMap(x => x.photos || []));
+                const photosToDelete = (product.photos || []).filter(url => !sharedPhotos.has(url));
+                if (photosToDelete.length > 0) {
+                    const keys = photosToDelete.map(url => {
                         return new URL(url).pathname.substring(1); 
                     });
                     
@@ -782,256 +975,373 @@ window.deleteProduct = async (id) => {
             
         } catch (error) {
             console.error("Erreur lors de la suppression :", error);
-            alert("Une erreur est survenue lors de la suppression du produit.");
+            notify("Une erreur est survenue lors de la suppression du produit.");
         }
     }
 };
 
+let ordersFilter = 'all';
+
+const orderDate = (o) => o.createdAt?.toDate ? o.createdAt.toDate() : null;
+const isToPrepare = (o) => o.status === 'Payé' || o.status === 'En préparation';
+
 async function loadOrders() {
     const container = document.getElementById('adminOrders');
     if (!container) return;
-    container.innerHTML = '<p>Chargement des commandes...</p>';
+    if (!adminOrders.length) container.innerHTML = '<p class="muted">Chargement des commandes...</p>';
     
     try {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
-        
-        container.innerHTML = '';
-        
-        if (snap.empty) {
-            container.innerHTML = '<p>Aucune commande pour le moment.</p>';
-            return;
+        adminOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderOrders();
+        renderDashboard();
+    } catch (error) {
+        console.error("Erreur de chargement du tableau des commandes :", error);
+        container.innerHTML = '<p>❌ Erreur lors du chargement des commandes.</p>';
+    }
+}
+window.loadOrders = loadOrders;
+
+// Nom lisible d'un article (les commandes récentes stockent le nom, les anciennes seulement l'ID)
+const itemLabel = (item) => {
+    const name = item.name || adminProducts.find(p => p.id === item.id)?.name || 'Spécimen supprimé';
+    let lotText = '';
+    if (item.lotSize !== null && item.lotSize !== undefined && item.lotSize !== '') {
+        lotText = (typeof item.lotSize === 'string' && !/^\d+$/.test(item.lotSize)) ? ` (Option : ${item.lotSize})` : (Number(item.lotSize) > 1 ? ` (Lot de ${item.lotSize})` : '');
+    }
+    const freeOptText = item.freeOption ? ` (+ ${item.freeOption})` : '';
+    return `${name}${lotText}${freeOptText}`;
+};
+
+function renderOrders() {
+    const container = document.getElementById('adminOrders');
+    const search = (document.getElementById('ordersSearch')?.value || '').trim().toLowerCase();
+
+    const list = adminOrders.filter(o => {
+        if (ordersFilter === 'to-prepare' && !isToPrepare(o)) return false;
+        if (ordersFilter !== 'all' && ordersFilter !== 'to-prepare' && o.status !== ordersFilter) return false;
+        if (search) {
+            const haystack = `${o.id} ${o.customerName || ''} ${o.customerEmail || ''} ${o.customerPhone || ''} ${o.trackingNumber || ''}`.toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
+        return true;
+    });
+
+    const countEl = document.getElementById('ordersCount');
+    if (countEl) countEl.textContent = list.length === adminOrders.length ? `${adminOrders.length}` : `${list.length} / ${adminOrders.length}`;
+
+    // Compteurs sur les puces de filtre
+    document.querySelectorAll('#ordersStatusChips .chip').forEach(chip => {
+        const f = chip.dataset.filter;
+        const n = f === 'all' ? adminOrders.length : adminOrders.filter(o => f === 'to-prepare' ? isToPrepare(o) : o.status === f).length;
+        if (!chip.dataset.label) chip.dataset.label = chip.textContent.trim();
+        chip.innerHTML = `${chip.dataset.label} <span class="chip-count">${n}</span>`;
+        chip.classList.toggle('active', f === ordersFilter);
+    });
+
+    if (list.length === 0) {
+        container.innerHTML = '<p class="muted" style="text-align:center; padding: 20px;">Aucune commande ne correspond.</p>';
+        return;
+    }
+
+    container.innerHTML = list.map(order => {
+        const orderId = order.id;
+        const dateObj = orderDate(order) ? orderDate(order).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Date inconnue';
+        const itemsHtml = (order.items || []).map(item => `<li><strong>x${esc(item.quantity)}</strong> - ${esc(itemLabel(item))}</li>`).join('');
+        const statusInfo = ORDER_STATUSES.find(st => st.value === order.status) || { cls: 'status-pending' };
+        const shippingBadge = SHIPPING_LABELS[order.shippingMethod] || '🚚 Colissimo';
+
+        let addressHtml = '';
+        if (order.shippingMethod !== 'retrait' && order.shippingAddress) {
+            const addr = order.shippingAddress;
+            addressHtml = `${esc(addr.line1)}${addr.line2 ? '<br>' + esc(addr.line2) : ''}<br>${esc(addr.postalCode)} ${esc(addr.city)}, ${esc(addr.country)}`;
+        } else if (order.shippingMethod === 'retrait') {
+            addressHtml = `<span class="muted">Pink Tropical, KM4 CENTER, Route d'Arles, Bouillargues</span>`;
+        } else {
+            addressHtml = '<em class="muted">Pas d\'adresse (paiement incomplet)</em>';
         }
 
-        for (const orderDoc of snap.docs) {
-            const order = orderDoc.data();
-            const orderId = orderDoc.id;
-            const dateObj = order.createdAt?.toDate() ? order.createdAt.toDate().toLocaleDateString('fr-FR', {hour: '2-digit', minute:'2-digit'}) : 'Date inconnue';
+        const extras = [];
+        if (order.hasHeatPack) extras.push('<span class="tag tag-cold">❄️ Chaufferette</span>');
+        if (order.weatherWarning === 'Canicule') extras.push('<span class="tag tag-hot">☀️ Canicule</span>');
 
-            let itemsHtml = '';
-            if (order.items && order.items.length > 0) {
-                for (const item of order.items) {
-                    const prodSnap = await getDoc(doc(db, "products", item.id));
-                    const prodName = prodSnap.exists() ? prodSnap.data().name : "Spécimen supprimé";
-                    
-                    // NOUVEAU : Gestion de l'affichage textuel propre selon s'il s'agit d'une dimension (string) ou d'un lot d'insectes (number)
-                    const lotText = item.lotSize ? (typeof item.lotSize === 'string' ? ` (Option : ${item.lotSize})` : ` (Lot de ${item.lotSize})`) : '';
-                    
-                    // NOUVEAU : Récupération et affichage de la variante gratuite choisie par le client
-                    const freeOptText = item.freeOption ? ` (+ ${item.freeOption})` : '';
-                    
-                    itemsHtml += `<li><strong>x${item.quantity}</strong> - ${prodName}${lotText}${freeOptText}</li>`;
-                }
-            }
+        const showTracking = order.shippingMethod !== 'retrait' && order.status !== 'En attente de paiement' && order.status !== 'Annulé';
 
-            const shippingBadge = order.shippingMethod === 'chrono18' ? '🚀 Chrono 18' : (order.shippingMethod === 'retrait' ? '📦 Retrait sur place' : '🚚 Colissimo');
-            
-            let addressHtml = `
-                <div style="background: #eef2f5; padding: 8px 12px; border-radius: 6px; margin-bottom: 10px; display: inline-block;">
-                    <span style="color:#4a7599; font-weight:bold; font-size: 1.05rem;">${shippingBadge}</span>
-                </div>
-                <br><strong>Nom du client :</strong> ${order.customerName || 'Client'}<br>
-            `;
-
-            if (order.shippingMethod !== 'retrait' && order.shippingAddress) {
-                const addr = order.shippingAddress;
-                addressHtml += `
-                    ${addr.line1} ${addr.line2 ? '<br>' + addr.line2 : ''}<br>
-                    ${addr.postalCode} ${addr.city}, ${addr.country}
-                `;
-            } else if (order.shippingMethod === 'retrait') {
-                addressHtml += `<span style="color: #888; font-size: 0.85rem;">KM4 CENTER, Route d'Arles, Bouillargues</span>`;
-            } else {
-                addressHtml += '<em>Pas d\'adresse (Paiement incomplet ou service)</em>';
-            }
-
-            const div = document.createElement('div');
-            div.className = 'order-card'; 
-            
-            div.innerHTML = `
+        return `
+            <div class="order-card ${statusInfo.cls}">
                 <div class="order-card-header">
                     <div>
                         <span class="order-id">CMD #${orderId.slice(0,6).toUpperCase()}</span>
                         <span class="order-date">${dateObj}</span>
                     </div>
-                    <select onchange="updateOrderStatus('${orderId}', this.value)" class="status-select">
-                        <option value="En attente de paiement" ${order.status === 'En attente de paiement' ? 'selected' : ''}>En attente</option>
-                        <option value="Payé" ${order.status === 'Payé' ? 'selected' : ''}>Payé (À préparer)</option>
-                        <option value="En préparation" ${order.status === 'En preparation' ? 'selected' : ''}>En préparation</option>
-                        <option value="Expédié" ${order.status === 'Expédié' ? 'selected' : ''}>Expédié / Prêt au retrait</option>
+                    <select onchange="updateOrderStatus('${orderId}', this.value, this)" class="status-select ${statusInfo.cls}" data-previous="${esc(order.status)}">
+                        ${ORDER_STATUSES.map(st => `<option value="${st.value}" ${order.status === st.value ? 'selected' : ''}>${st.label}</option>`).join('')}
                     </select>
                 </div>
                 <div class="order-card-body">
                     <div class="order-col">
-                        <h4>Contenu du colis :</h4>
-                        <ul>${itemsHtml}</ul>
-                        <p class="order-price-total">Montant total : <strong>${Number(order.amountValue || 0).toFixed(2)} €</strong></p>
+                        <h4>Contenu du colis</h4>
+                        <ul>${itemsHtml || '<li class="muted">Aucun article</li>'}</ul>
+                        <p class="order-price-total">
+                            ${order.shippingCost !== undefined ? `<span class="muted">Dont livraison : ${formatEuro(order.shippingCost)}</span><br>` : ''}
+                            Montant total : <strong>${formatEuro(order.amountValue)}</strong>
+                        </p>
                     </div>
                     <div class="order-col">
-                        <h4>Adresse / Livraison :</h4>
-                        <p class="order-address-text">${addressHtml}</p>
+                        <h4>Client & livraison</h4>
+                        <div class="order-shipping-badge">${shippingBadge} ${extras.join(' ')}</div>
+                        <p class="order-address-text"><strong>${esc(order.customerName || 'Client')}</strong><br>${addressHtml}</p>
                         <p class="order-contact-email">
-                            ✉️ ${order.customerEmail || 'Anonyme'}<br>
-                            📞 <strong>${order.customerPhone || 'Non renseigné'}</strong>
+                            ✉️ ${order.customerEmail ? `<a href="mailto:${esc(order.customerEmail)}">${esc(order.customerEmail)}</a>` : 'Anonyme'}<br>
+                            📞 ${order.customerPhone ? `<a href="tel:${esc(order.customerPhone)}"><strong>${esc(order.customerPhone)}</strong></a>` : 'Non renseigné'}
                         </p>
+                        ${showTracking ? `
+                        <div class="tracking-row">
+                            <input type="text" id="tracking_${orderId}" placeholder="N° de suivi (ex: 6A123...)" value="${esc(order.trackingNumber || '')}">
+                            <button type="button" class="btn-outline" onclick="saveTrackingNumber('${orderId}')">Enregistrer</button>
+                        </div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+document.getElementById('ordersSearch')?.addEventListener('input', renderOrders);
+document.querySelectorAll('#ordersStatusChips .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        ordersFilter = chip.dataset.filter;
+        renderOrders();
+    });
+});
+
+window.goToOrders = (filter) => {
+    ordersFilter = filter;
+    const btn = document.querySelector('.tab-btn[data-tab="tab-commandes"]');
+    switchTab('tab-commandes', btn);
+    renderOrders();
+};
+
+window.saveTrackingNumber = async (orderId) => {
+    const input = document.getElementById(`tracking_${orderId}`);
+    const trackingNumber = input.value.trim();
+    try {
+        await updateDoc(doc(db, "orders", orderId), { trackingNumber });
+        const order = adminOrders.find(o => o.id === orderId);
+        if (order) order.trackingNumber = trackingNumber;
+        notify(trackingNumber ? "📮 Numéro de suivi enregistré (il sera inclus dans l'e-mail d'expédition)" : "Numéro de suivi supprimé");
+    } catch (error) {
+        console.error(error);
+        notify("❌ Impossible d'enregistrer le numéro de suivi.");
+    }
+};
+
+// Export CSV des commandes affichées (compta, suivi des envois...)
+window.exportOrdersCsv = () => {
+    const rows = [['N° commande', 'Date', 'Statut', 'Client', 'E-mail', 'Téléphone', 'Livraison', 'Adresse', 'Articles', 'Frais de port', 'Total', 'N° de suivi']];
+    adminOrders.forEach(o => {
+        const addr = o.shippingAddress ? `${o.shippingAddress.line1 || ''} ${o.shippingAddress.line2 || ''}, ${o.shippingAddress.postalCode || ''} ${o.shippingAddress.city || ''} ${o.shippingAddress.country || ''}` : '';
+        rows.push([
+            o.id.slice(0, 6).toUpperCase(),
+            orderDate(o) ? orderDate(o).toLocaleString('fr-FR') : '',
+            o.status || '',
+            o.customerName || '',
+            o.customerEmail || '',
+            o.customerPhone || '',
+            o.shippingMethod || '',
+            addr.trim(),
+            (o.items || []).map(i => `${i.quantity}x ${itemLabel(i)}`).join(' | '),
+            Number(o.shippingCost || 0).toFixed(2).replace('.', ','),
+            Number(o.amountValue || 0).toFixed(2).replace('.', ','),
+            o.trackingNumber || ''
+        ]);
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `commandes-terraophis-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+};
+
+window.updateOrderStatus = async (id, newStatus, selectEl = null) => {
+    const order = adminOrders.find(o => o.id === id);
+    const email = order?.customerEmail;
+    const willEmail = email && email !== 'Anonyme' && email !== 'Non renseigné' && (newStatus === 'En préparation' || newStatus === 'Expédié');
+
+    if (!confirm(`Passer la commande #${id.slice(0,6).toUpperCase()} au statut "${newStatus}" ?${willEmail ? `\n\nUn e-mail sera envoyé au client (${email}).` : ''}`)) {
+        if (selectEl) selectEl.value = selectEl.dataset.previous;
+        return;
+    }
+
+    try {
+        const orderRef = doc(db, "orders", id);
+        await updateDoc(orderRef, { status: newStatus, statusUpdatedAt: serverTimestamp() });
+        if (order) order.status = newStatus;
+
+        let emailSent = false;
+        if (willEmail) {
+            const name = esc(order.customerName || 'Client');
+            const isPickup = order.shippingMethod === 'retrait';
+            const tracking = order.trackingNumber;
+            let subject = '';
+            let statusTitle = '';
+            let statusText = '';
+
+            if (newStatus === 'En préparation') {
+                subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en préparation 🌿`;
+                statusTitle = `Préparation en cours...`;
+                statusText = `Votre sélection d'insectes et arthropodes est actuellement prise en charge au sein de notre élevage. Nous composons votre colis avec le plus grand soin en veillant aux paramètres d'aération et d'isothermie nécessaires à leur bien-être. ${isPickup ? 'Vous recevrez un nouvel e-mail dès que votre commande sera prête à être retirée.' : 'Vous recevrez un nouvel e-mail dès la remise de vos spécimens au transporteur.'}`;
+            } else if (newStatus === 'Expédié' && isPickup) {
+                subject = `Votre commande #${id.slice(0,6).toUpperCase()} est prête ! 📦`;
+                statusTitle = `Votre commande vous attend`;
+                statusText = `Bonne nouvelle ! Votre commande est prête à être retirée chez Pink Tropical (KM4 CENTER, Route d'Arles, Bouillargues). Répondez simplement à cet e-mail pour convenir d'un rendez-vous.`;
+            } else if (newStatus === 'Expédié') {
+                subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en route ! 📦`;
+                statusTitle = `Vos spécimens voyagent !`;
+                statusText = `Bonne nouvelle ! Votre colis a été remis à notre transporteur partenaire. Vos spécimens voyagent dans des conditions adaptées et sécurisées. Veillez à bien préparer leurs terrariums ou vivariums d'accueil afin de garantir une acclimatation douce dès leur arrivée.${tracking ? `<br><br><strong>Numéro de suivi : ${esc(tracking)}</strong><br><a href="https://www.laposte.fr/outils/suivre-vos-envois?code=${encodeURIComponent(tracking)}" style="color:#4d5d30;">Suivre mon colis</a>` : ''}`;
+            }
+
+            const htmlTemplate = `
+                <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
+                    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
+                        <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
+                            <img src="https://terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
+                            <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Suivi de votre commande</p>
+                        </div>
+                        <div style="padding: 35px; color: #4a4238; text-align: center;">
+                            <h2 style="font-size: 20px; margin-top: 0; color: #4d5d30; font-weight: 600;">${statusTitle}</h2>
+                            <p style="font-size: 15px; line-height: 1.6; color: #555; text-align: left; background: #faf9f5; padding: 20px; border-radius: 8px; border-left: 3px solid #4d5d30;">
+                                Bonjour ${name},<br><br>
+                                ${statusText}
+                            </p>
+                            <p style="font-size: 14px; color: #666; margin-top: 25px;">Historique disponible dans votre <a href="https://terraophis.fr/profil" style="color:#4d5d30;">espace client</a>.</p>
+                            <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
+                            <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">L'équipe Terraophis</p>
+                        </div>
                     </div>
                 </div>
             `;
-            container.appendChild(div);
+
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ to: email, subject, html: htmlTemplate, replyTo: 'terra.ophis@gmail.com' })
+            });
+            emailSent = res.ok;
+            if (!res.ok) notify("⚠️ Statut mis à jour, mais l'e-mail au client n'a pas pu être envoyé.", 'error');
         }
-    } catch (error) {
-        console.error("Erreur de chargement du tableau des commandes :", error);
-        container.innerHTML = '<p>Erreur lors du chargement des informations.</p>';
-    }
-}
 
-window.updateOrderStatus = async (id, newStatus) => {
-    try {
-        const orderRef = doc(db, "orders", id);
-        const orderSnap = await getDoc(orderRef);
-
-        await updateDoc(orderRef, { status: newStatus });
-
-        if (orderSnap.exists()) {
-            const order = orderSnap.data();
-            const email = order.customerEmail;
-            const name = order.customerName || 'Client';
-
-            if (email && email !== 'Anonyme' && email !== 'Non renseigné') {
-                let subject = '';
-                let statusTitle = '';
-                let statusText = '';
-
-                if (newStatus === 'En préparation') {
-                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en préparation 🌿`;
-                    statusTitle = `Préparation en cours...`;
-                    statusText = `Votre sélection d'insectes et arthropodes est actuellement prise en charge au sein de notre élevage. Nous composons votre colis avec le plus grand soin en veillant aux paramètres d'aération et d'isothermie nécessaires à leur bien-être. Vous recevrez un nouvel e-mail dès la remise de vos spécimens au transporteur.`;
-                } else if (newStatus === 'Expédié') {
-                    subject = `Votre commande #${id.slice(0,6).toUpperCase()} est en route ! 📦`;
-                    statusTitle = `Vos spécimens voyagent !`;
-                    statusText = `Bonne nouvelle ! Votre colis a été remis à notre transporteur partenaire. Vos spécimens voyagent dans des conditions adaptées et sécurisées. Veillez à bien préparer leurs terrariums ou vivariums d'accueil afin de garantir une acclimatation douce dès leur arrivée.`;
-                }
-
-                if (subject && statusText) {
-                    const htmlTemplate = `
-                        <div style="background-color: #fcf8f2; padding: 40px 10px; font-family: 'Helvetica Neue', Arial, sans-serif;">
-                            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e0ddd5; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,66,56,0.05);">
-                                <div style="background-color: #4d5d30; padding: 30px; text-align: center;">
-                                    <img src="https://working.terraophis.fr/assets/img/logo_carre.png" alt="Terraophis" style="max-width: 120px; height: auto; display: block; margin: 0 auto;">
-                                    <p style="color: #eadb9d; margin: 15px 0 0 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;">Suivi de votre commande</p>
-                                </div>
-                                <div style="padding: 35px; color: #4a4238; text-align: center;">
-                                    <h2 style="font-size: 20px; margin-top: 0; color: #4d5d30; font-weight: 600;">${statusTitle}</h2>
-                                    <p style="font-size: 15px; line-height: 1.6; color: #555; text-align: left; background: #faf9f5; padding: 20px; border-radius: 8px; border-left: 3px solid #4d5d30;">
-                                        Bonjour ${name},<br><br>
-                                        ${statusText}
-                                    </p>
-                                    <p style="font-size: 14px; color: #666; margin-top: 25px;">Numéro de suivi et historique disponibles dans votre espace client.</p>
-                                    <hr style="border: none; border-top: 1px solid #e0ddd5; margin: 30px 0;">
-                                    <p style="margin: 0; font-size: 14px; color: #888; font-style: italic;">L'équipe Terraophis</p>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-
-                    const token = await auth.currentUser.getIdToken();
-                    await fetch('/api/send-email', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            to: email,
-                            subject: subject,
-                            html: htmlTemplate
-                        })
-                    });
-                    console.log(`✅ Email de statut envoyé à ${email} pour le statut : ${newStatus}`);
-                }
-            }
-        }
-        alert("Statut mis à jour avec succès et e-mail envoyé !");
+        if (!willEmail || emailSent) notify(emailSent ? `✅ Statut mis à jour et e-mail envoyé à ${email}` : "✅ Statut mis à jour");
+        renderOrders();
+        renderDashboard();
     } catch (error) {
         console.error("Erreur mise à jour statut :", error);
-        alert("Erreur lors de la mise à jour du statut.");
+        notify("❌ Erreur lors de la mise à jour du statut.");
+        if (selectEl) selectEl.value = selectEl.dataset.previous;
     }
 };
+
+// --- Tableau de bord ---
+function renderDashboard() {
+    const now = new Date();
+    const paidStatuses = ['Payé', 'En préparation', 'Expédié'];
+    const paidOrders = adminOrders.filter(o => paidStatuses.includes(o.status));
+    const monthOrders = paidOrders.filter(o => {
+        const d = o.paymentDate?.toDate ? o.paymentDate.toDate() : orderDate(o);
+        return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const revenue = monthOrders.reduce((sum, o) => sum + Number(o.amountPaid ?? o.amountValue ?? 0), 0);
+    const toPrepare = adminOrders.filter(isToPrepare);
+    const outOfStock = adminProducts.filter(p => !p.hidden && p._stock.isOut);
+    const lowStock = adminProducts.filter(p => !p.hidden && p._stock.isLow);
+    const hidden = adminProducts.filter(p => p.hidden);
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('kpiRevenueMonth', formatEuro(revenue));
+    set('kpiRevenueSub', `${monthOrders.length} commande${monthOrders.length > 1 ? 's' : ''} payée${monthOrders.length > 1 ? 's' : ''} ce mois-ci`);
+    set('kpiToPrepare', toPrepare.length);
+    set('kpiOutOfStock', outOfStock.length);
+    set('kpiLowStockSub', `${lowStock.length} en stock faible (≤ ${LOW_STOCK_THRESHOLD})`);
+    set('kpiHidden', hidden.length);
+    set('kpiVisibleSub', `${adminProducts.length - hidden.length} visibles sur la boutique`);
+
+    const badge = document.getElementById('ordersTabBadge');
+    if (badge) {
+        badge.textContent = toPrepare.length;
+        badge.style.display = toPrepare.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    const ordersEl = document.getElementById('dashboardOrders');
+    if (ordersEl) {
+        ordersEl.innerHTML = toPrepare.length === 0
+            ? '<p class="muted">🎉 Aucune commande en attente de préparation.</p>'
+            : toPrepare.slice(0, 8).map(o => `
+                <div class="dash-row" onclick="goToOrders('to-prepare')">
+                    <div>
+                        <strong>#${o.id.slice(0,6).toUpperCase()}</strong> · ${esc(o.customerName || 'Client')}
+                        <div class="muted small">${(o.items || []).reduce((n, i) => n + (parseInt(i.quantity) || 0), 0)} article(s) · ${SHIPPING_LABELS[o.shippingMethod] || ''}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <strong>${formatEuro(o.amountValue)}</strong>
+                        <div class="small"><span class="status-dot ${(ORDER_STATUSES.find(st => st.value === o.status) || {}).cls}"></span>${esc(o.status)}</div>
+                    </div>
+                </div>`).join('');
+    }
+
+    const stockEl = document.getElementById('dashboardLowStock');
+    if (stockEl) {
+        const items = [...outOfStock, ...lowStock].slice(0, 10);
+        stockEl.innerHTML = items.length === 0
+            ? '<p class="muted">✅ Tous les stocks sont confortables.</p>'
+            : items.map(p => `
+                <div class="dash-row" onclick="editProduct('${p.id}')">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <img src="${esc(p.photos?.[0] || '../assets/img/placeholder.jpg')}" class="dash-thumb" alt="">
+                        <span>${esc(p.name)}</span>
+                    </div>
+                    <span class="stock-badge ${p._stock.isOut ? 'stock-out' : 'stock-low'}">${p._stock.isOut ? 'Rupture' : 'Reste ' + p._stock.stock}</span>
+                </div>`).join('');
+    }
+}
 
 document.getElementById('btnLogout').addEventListener('click', () => signOut(auth));
 
 // NOUVEAU: Gestion du système d'onglets
 window.switchTab = (tabId, btnElement) => {
-    // Masquer tous les contenus
-    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-    // Réinitialiser le style des boutons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.style.background = 'transparent';
-        btn.style.color = 'var(--accent-brown)';
-    });
-    
-    // Afficher le bon onglet et styliser le bouton actif
-    document.getElementById(tabId).style.display = 'block';
-    btnElement.style.background = 'var(--accent-brown)';
-    btnElement.style.color = 'white';
+    const tab = document.getElementById(tabId);
+    if (!tab) return;
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    tab.style.display = 'block';
+    (btnElement || document.querySelector(`.tab-btn[data-tab="${tabId}"]`))?.classList.add('active');
+    // L'onglet est mémorisé dans l'URL : un rafraîchissement ramène au même endroit
+    history.replaceState(null, '', `#${tabId.replace('tab-', '')}`);
 };
+
+function restoreTabFromHash() {
+    const hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById(`tab-${hash}`)) switchTab(`tab-${hash}`);
+}
+
+// Fermeture des modales au clic sur le fond ou avec la touche Échap
+const modalClosers = { sliderModal: () => closeSliderModal(), editProductModal: () => closeEditModal(), editGuideModal: () => closeEditGuideModal(), editCategoryModal: () => closeEditCategoryModal() };
+Object.entries(modalClosers).forEach(([id, close]) => {
+    document.getElementById(id)?.addEventListener('mousedown', (e) => { if (e.target.id === id) close(); });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    Object.entries(modalClosers).forEach(([id, close]) => {
+        if (document.getElementById(id)?.style.display === 'flex') close();
+    });
+});
 
 // NOUVEAU: Upload et sauvegarde des images du Hero Slider
 const sliderForm = document.getElementById('sliderForm');
 const sliderStatusMsg = document.getElementById('sliderUploadStatus');
-
-if(sliderForm) {
-    sliderForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('btnSubmitSlider');
-    const files = document.getElementById('sliderFiles').files;
-    if (files.length === 0) return;
-    
-    try {
-        btn.disabled = true;
-        sliderStatusMsg.textContent = "Ajout des images... ⏳";
-        
-        const uploadData = new FormData();
-        for (let i = 0; i < files.length; i++) { uploadData.append('photos', files[i]); }
-        
-        const token = await auth.currentUser.getIdToken();
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: uploadData
-        });
-
-        if (!response.ok) throw new Error("Échec de l'upload");
-        const { files: uploadedFiles } = await response.json();
-        const newUrls = uploadedFiles.map(f => f.url);
-
-        // RÉCUPÉRATION ET FUSION
-        const docRef = doc(db, "settings", "heroSlider");
-        const docSnap = await getDoc(docRef);
-        let finalPhotos = newUrls;
-
-        if (docSnap.exists() && docSnap.data().photos) {
-            // On concatène les nouvelles photos aux anciennes au lieu de les remplacer
-            const existingPhotos = docSnap.data().photos;
-            finalPhotos = [...existingPhotos, ...newUrls];
-        }
-
-        await setDoc(docRef, {
-            photos: finalPhotos,
-            updatedAt: serverTimestamp()
-        });
-
-        sliderStatusMsg.textContent = "✅ Images ajoutées avec succès !";
-        sliderForm.reset();
-        loadSliderPreview(); // On rafraîchit l'aperçu immédiatement
-    } catch (err) {
-        console.error("Erreur Slider :", err);
-        sliderStatusMsg.textContent = "❌ Erreur : " + err.message;
-    } finally {
-        btn.disabled = false;
-    }
-});
-}
 
 const guideForm = document.getElementById('guideForm');
 const guideStatusMsg = document.getElementById('guideUploadStatus');
@@ -1386,7 +1696,7 @@ window.editGuide = async (id) => {
         }
     } catch (error) {
         console.error("Erreur de chargement de la fiche :", error);
-        alert("Impossible de charger la fiche conseil.");
+        notify("Impossible de charger la fiche conseil.");
     }
 };
 
@@ -1476,7 +1786,7 @@ window.deleteGuide = async (id) => {
             loadGuides();
         } catch (error) {
             console.error("Erreur lors de la suppression de la fiche :", error);
-            alert("Une erreur est survenue lors de la suppression.");
+            notify("Une erreur est survenue lors de la suppression.");
         }
     }
 };
@@ -1512,7 +1822,7 @@ window.handleInlineImageUpload = async (input, editorId) => {
         }
     } catch (err) {
         console.error("Erreur lors de l'insertion de l'image :", err);
-        alert("Impossible d'insérer l'image à cet emplacement.");
+        notify("Impossible d'insérer l'image à cet emplacement.");
     } finally {
         input.value = '';
     }
@@ -1577,6 +1887,18 @@ window.loadAdminCategories = async () => {
     const fullOptionsHtml = defaultOption + optionsAnimaux + optionsMateriels + optionsPacks;
 
     listContainer.innerHTML = listHtml || '<p>Aucune catégorie configurée.</p>';
+
+    adminCategories = {};
+    categoriesSnap.forEach(catDoc => { adminCategories[catDoc.id] = catDoc.data(); });
+    const invFilter = document.getElementById('inventoryCategoryFilter');
+    if (invFilter) {
+        const current = invFilter.value;
+        invFilter.innerHTML = '<option value="all">Toutes les catégories</option>' + Object.entries(adminCategories)
+            .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''))
+            .map(([id, c]) => `<option value="${id}">${esc(c.name)}</option>`).join('');
+        invFilter.value = adminCategories[current] ? current : 'all';
+    }
+    if (adminProducts.length) renderInventory();
     if (productCatSelect) productCatSelect.innerHTML = fullOptionsHtml;
     if (editCatSelect) editCatSelect.innerHTML = fullOptionsHtml;
 };
@@ -1628,12 +1950,12 @@ document.getElementById('categoryForm')?.addEventListener('submit', async (e) =>
     
     const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
 
-    if (!id || !name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
+    if (!id || !name || lots.length === 0) return notify("Veuillez remplir correctement tous les champs.", 'error');
 
     await setDoc(doc(db, "categories", id), { name, type, lots, defaultDisplayLot });
     document.getElementById('categoryForm').reset();
     loadAdminCategories();
-    alert("Catégorie créée et liée avec succès ! 🎉");
+    notify("Catégorie créée et liée avec succès ! 🎉");
 });
 
 window.deleteCategory = async (id) => {
@@ -1672,12 +1994,12 @@ document.getElementById('editCategoryForm')?.addEventListener('submit', async (e
     
     const lots = lotsRaw.split(',').map(l => parseInt(l.trim())).filter(l => !isNaN(l));
 
-    if (!name || lots.length === 0) return alert("Veuillez remplir correctement tous les champs.");
+    if (!name || lots.length === 0) return notify("Veuillez remplir correctement tous les champs.", 'error');
 
     await updateDoc(doc(db, "categories", id), { name, type, lots, defaultDisplayLot });
     closeEditCategoryModal();
     loadAdminCategories();
-    alert("Catégorie mise à jour avec succès ! ✏️");
+    notify("Catégorie mise à jour avec succès ! ✏️");
 });
 
 // NOUVEAU : Fonction pour le widget météo du Panel Admin
@@ -1785,18 +2107,14 @@ window.toggleBundleBuilder = async (selectElement, builderId) => {
         builder.style.display = 'block';
         // NOUVEAU : On masque le champ stock et on le rend facultatif
         if (stockInput) {
-            stockInput.style.display = 'none';
-            stockInput.required = false;
+            setStockFieldVisible(stockInput, false);
             stockInput.value = '0'; // On force à 0 en base de données
         }
         await loadAllProductsForBundle();
     } else {
         builder.style.display = 'none';
         // NOUVEAU : On réaffiche le champ stock
-        if (stockInput) {
-            stockInput.style.display = ''; // Retour au style par défaut
-            stockInput.required = true;
-        }
+        setStockFieldVisible(stockInput, true);
         window.currentBundleItems = [];
         const listEl = document.getElementById('bundleItemsList');
         if (listEl) listEl.innerHTML = '';
@@ -1839,7 +2157,7 @@ window.addBundleItem = (inputId, qtyId, listId) => {
     const option = Array.from(datalist.options).find(opt => opt.value === input.value);
     
     if (!option) {
-        alert("Veuillez sélectionner un article suggéré dans la liste.");
+        notify("Veuillez sélectionner un article suggéré dans la liste.", 'error');
         return;
     }
 
@@ -1968,7 +2286,7 @@ window.addTeamMember = async () => {
     const fileInput = document.getElementById('newMemberFile');
     const btn = document.getElementById('btnAddMember');
 
-    if (!name || !role) return alert("Veuillez remplir le nom et le rôle du membre.");
+    if (!name || !role) return notify("Veuillez remplir le nom et le rôle du membre.", 'error');
 
     try {
         btn.disabled = true;
@@ -2003,10 +2321,10 @@ window.addTeamMember = async () => {
         fileInput.value = '';
         
         loadAboutPageAdmin();
-        alert("✅ Membre d'équipe ajouté avec succès !");
+        notify("✅ Membre d'équipe ajouté avec succès !");
     } catch (err) {
         console.error(err);
-        alert("Erreur lors de l'ajout : " + err.message);
+        notify("Erreur lors de l'ajout : " + err.message);
     } finally {
         btn.disabled = false;
     }
@@ -2151,10 +2469,10 @@ document.getElementById('shippingConfigForm')?.addEventListener('submit', async 
             heatPack
         }, { merge: true });
         
-        alert("La configuration des livraisons a été mise à jour avec succès !");
+        notify("La configuration des livraisons a été mise à jour avec succès !");
     } catch (error) {
         console.error("Erreur lors de la sauvegarde de la configuration :", error);
-        alert("Une erreur est survenue lors de l'enregistrement des tarifs.");
+        notify("Une erreur est survenue lors de l'enregistrement des tarifs.");
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;

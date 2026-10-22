@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../style.css">
     <link rel="stylesheet" href="admin.css">
     <link rel="icon" type="image/x-icon" href="/assets/img/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
 </head>
 <body class="beige-theme admin-body">
 
@@ -15,30 +16,108 @@
     </div>
 
     <nav class="admin-nav" id="adminNav" style="display: none;">
-        <div class="logo">TERRAOPHIS <span style="font-size: 0.7rem; color: #888;">PANEL ADMIN</span></div>
-        
-        <div id="adminWeatherWidget" style="background: rgba(74, 66, 56, 0.05); padding: 5px 15px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-light);">
-            <span id="adminWeatherIcon">⏳</span>
-            <span id="adminWeatherTemp" style="color: var(--accent-brown); font-weight: 600;">Chargement météo...</span>
+        <div class="admin-nav-top">
+            <div class="logo">TERRAOPHIS <span class="logo-sub">PANEL ADMIN</span></div>
+
+            <div class="admin-nav-right">
+                <div id="adminWeatherWidget" class="weather-widget">
+                    <span id="adminWeatherIcon">⏳</span>
+                    <span id="adminWeatherTemp">Chargement météo...</span>
+                </div>
+                <a href="/" target="_blank" class="btn-outline btn-view-site" title="Ouvrir la boutique dans un nouvel onglet">Voir le site ↗</a>
+                <button id="btnLogout" class="btn-logout">Déconnexion</button>
+            </div>
         </div>
 
         <div class="admin-tabs">
-            <button class="tab-btn active" onclick="switchTab('tab-stocks', this)">Stocks</button>
-            <button class="tab-btn" onclick="switchTab('tab-commandes', this)">Commandes</button>
-            <button class="tab-btn" onclick="switchTab('tab-affichage', this)">Affichage</button>
-            <button class="tab-btn" onclick="switchTab('tab-categories', this)">Catégories</button>
-            <button class="tab-btn" onclick="switchTab('tab-guides', this)">Guides</button>
-            <button class="tab-btn" onclick="switchTab('tab-livraisons', this)">Livraisons</button>
+            <button class="tab-btn active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard', this)">📊 Tableau de bord</button>
+            <button class="tab-btn" data-tab="tab-stocks" onclick="switchTab('tab-stocks', this)">🦗 Produits</button>
+            <button class="tab-btn" data-tab="tab-commandes" onclick="switchTab('tab-commandes', this)">📦 Commandes <span id="ordersTabBadge" class="tab-badge" style="display:none;"></span></button>
+            <button class="tab-btn" data-tab="tab-affichage" onclick="switchTab('tab-affichage', this)">🖼️ Affichage</button>
+            <button class="tab-btn" data-tab="tab-categories" onclick="switchTab('tab-categories', this)">🗂️ Catégories</button>
+            <button class="tab-btn" data-tab="tab-guides" onclick="switchTab('tab-guides', this)">📖 Guides</button>
+            <button class="tab-btn" data-tab="tab-livraisons" onclick="switchTab('tab-livraisons', this)">🚚 Livraisons</button>
         </div>
-
-        <button id="btnLogout" class="btn-logout">Déconnexion</button>
     </nav>
 
     <main class="admin-container" id="adminMain" style="display: none;">
+
+        <div id="tab-dashboard" class="tab-content">
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Chiffre d'affaires (mois en cours)</span>
+                    <span class="kpi-value" id="kpiRevenueMonth">–</span>
+                    <span class="kpi-sub" id="kpiRevenueSub"></span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToOrders('to-prepare')">
+                    <span class="kpi-label">Commandes à préparer</span>
+                    <span class="kpi-value" id="kpiToPrepare">–</span>
+                    <span class="kpi-sub">Payées ou en préparation</span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToProducts('out')">
+                    <span class="kpi-label">Articles en rupture</span>
+                    <span class="kpi-value" id="kpiOutOfStock">–</span>
+                    <span class="kpi-sub" id="kpiLowStockSub"></span>
+                </div>
+                <div class="kpi-card kpi-clickable" onclick="goToProducts('hidden')">
+                    <span class="kpi-label">Articles masqués</span>
+                    <span class="kpi-value" id="kpiHidden">–</span>
+                    <span class="kpi-sub" id="kpiVisibleSub"></span>
+                </div>
+            </div>
+
+            <div class="dashboard-columns">
+                <section class="admin-section">
+                    <div class="section-header">
+                        <h2>À préparer</h2>
+                        <button class="btn-outline" onclick="goToOrders('to-prepare')">Toutes les commandes →</button>
+                    </div>
+                    <div id="dashboardOrders" class="dashboard-list"><p class="muted">Chargement...</p></div>
+                </section>
+                <section class="admin-section">
+                    <div class="section-header">
+                        <h2>Stock faible / rupture</h2>
+                        <button class="btn-outline" onclick="goToProducts('low')">Voir les produits →</button>
+                    </div>
+                    <div id="dashboardLowStock" class="dashboard-list"><p class="muted">Chargement...</p></div>
+                </section>
+            </div>
+        </div>
         
-        <div id="tab-stocks" class="tab-content">
+        <div id="tab-stocks" class="tab-content" style="display:none;">
             <section class="admin-section">
-                <h2>Ajouter un nouvel insecte</h2>
+                <div class="section-header">
+                    <h2>Inventaire <span id="inventoryCount" class="count-pill"></span></h2>
+                    <button type="button" class="btn-buy btn-compact" onclick="toggleCreateProduct(true)">+ Nouveau produit</button>
+                </div>
+
+                <div class="toolbar">
+                    <input type="search" id="inventorySearch" placeholder="🔍 Rechercher (nom, nom latin...)">
+                    <select id="inventoryCategoryFilter"><option value="all">Toutes les catégories</option></select>
+                    <select id="inventoryStatusFilter">
+                        <option value="all">Tous les statuts</option>
+                        <option value="visible">Visibles sur la boutique</option>
+                        <option value="hidden">Masqués</option>
+                        <option value="low">Stock faible (≤ 5)</option>
+                        <option value="out">En rupture</option>
+                        <option value="promo">En promo</option>
+                    </select>
+                    <select id="inventorySort">
+                        <option value="newest">Plus récents</option>
+                        <option value="name">Nom A → Z</option>
+                        <option value="stock-asc">Stock croissant</option>
+                        <option value="stock-desc">Stock décroissant</option>
+                    </select>
+                </div>
+
+                <div id="adminInventory" class="inventory-list"></div>
+            </section>
+
+            <section class="admin-section" id="createProductSection" style="display:none;">
+                <div class="section-header">
+                    <h2>Ajouter un nouveau produit</h2>
+                    <button type="button" class="btn-outline" onclick="toggleCreateProduct(false)">Fermer</button>
+                </div>
                 <form id="productForm" class="product-form">
                     <div class="form-group">
                         <input type="text" name="name" placeholder="Nom commun (ex: Mante Orchidée)" required>
@@ -79,8 +158,7 @@
                         <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
                             <input type="text" id="customOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
                             <input type="number" id="customOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
-                            <input type="number" id="customOptionStock" placeholder="Stock (opt.)" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;" title="Laisser vide pour utiliser le stock global du produit">
-                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionStock', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                            <button type="button" onclick="window.addCustomOption('customOptionValue', 'customOptionPrice', 'customOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
                         </div>
                         <ul id="customOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
@@ -98,8 +176,14 @@
                     <div id="matrixStockContainer" style="width: 100%;"></div>
 
                     <div class="form-group">
-                        <input type="number" name="stock" placeholder="Quantité en stock" required>
-                        <input type="number" name="oldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
+                        <label class="field">
+                            <span class="field-label">Quantité en stock</span>
+                            <input type="number" name="stock" placeholder="ex: 25" min="0" required>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Prix barré (€) — optionnel, affiche un badge PROMO</span>
+                            <input type="number" name="oldPrice" placeholder="ex: 39.90" step="0.01" min="0">
+                        </label>
                     </div>
                     <textarea name="description" placeholder="Description de l'espèce..." rows="4" required></textarea>
                     
@@ -123,20 +207,37 @@
                         <label for="productFiles">Photos du produit (Max 5)</label>
                         <input type="file" id="productFiles" multiple accept="image/*">
                     </div>
+
+                    <label class="switch-row">
+                        <input type="checkbox" name="hidden" id="productHidden">
+                        <span><strong>Enregistrer comme brouillon (masqué)</strong><br><small>L'article ne sera pas visible sur la boutique tant que vous ne l'aurez pas rendu visible.</small></span>
+                    </label>
+
                     <button type="submit" id="btnSubmit" class="btn-buy">PUBLIER LE PRODUIT</button>
                     <p id="uploadStatus"></p>
                 </form>
-            </section>
-
-            <section class="admin-section">
-                <h2>Inventaire actuel</h2>
-                <div id="adminInventory" class="inventory-list"></div>
             </section>
         </div>
 
         <div id="tab-commandes" class="tab-content" style="display:none;">
             <section class="admin-section">
-                <h2>Commandes Récentes</h2>
+                <div class="section-header">
+                    <h2>Commandes <span id="ordersCount" class="count-pill"></span></h2>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="button" class="btn-outline" onclick="loadOrders()">↻ Actualiser</button>
+                        <button type="button" class="btn-outline" onclick="exportOrdersCsv()">⬇ Export CSV</button>
+                    </div>
+                </div>
+                <div class="toolbar">
+                    <input type="search" id="ordersSearch" placeholder="🔍 N° de commande, nom, e-mail, téléphone...">
+                </div>
+                <div class="filter-chips" id="ordersStatusChips">
+                    <button type="button" class="chip active" data-filter="all">Toutes</button>
+                    <button type="button" class="chip" data-filter="to-prepare">À préparer</button>
+                    <button type="button" class="chip" data-filter="En attente de paiement">En attente de paiement</button>
+                    <button type="button" class="chip" data-filter="Expédié">Expédiées</button>
+                    <button type="button" class="chip" data-filter="Annulé">Annulées</button>
+                </div>
                 <div id="adminOrders" class="inventory-list"></div>
             </section>
         </div>
@@ -399,8 +500,7 @@
                         <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
                             <input type="text" id="editCustomOptionValue" placeholder="Valeur (ex: 10cm, 1L)" style="flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
                             <input type="number" id="editCustomOptionPrice" placeholder="Prix (€)" step="0.01" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;">
-                            <input type="number" id="editCustomOptionStock" placeholder="Stock (opt.)" style="width: 100px; flex-grow: 0; padding: 10px; border-radius: 6px; border: 1px solid #ddd;" title="Laisser vide pour utiliser le stock global du produit">
-                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionStock', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
+                            <button type="button" onclick="window.addCustomOption('editCustomOptionValue', 'editCustomOptionPrice', 'editCustomOptionsList')" class="btn-buy" style="padding: 10px 20px; margin-top: 0; flex-grow: 0;">Ajouter</button>
                         </div>
                         <ul id="editCustomOptionsList" style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;"></ul>
                     </div>
@@ -418,8 +518,14 @@
                     <div id="editMatrixStockContainer" style="width: 100%;"></div>
 
                     <div class="form-group">
-                        <input type="number" name="stock" id="editStock" placeholder="Quantité en stock">
-                        <input type="number" name="oldPrice" id="editOldPrice" placeholder="Prix d'origine barré (€) - Optionnel" step="0.01">
+                        <label class="field">
+                            <span class="field-label">Quantité en stock</span>
+                            <input type="number" name="stock" id="editStock" placeholder="ex: 25" min="0">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Prix barré (€) — optionnel, affiche un badge PROMO</span>
+                            <input type="number" name="oldPrice" id="editOldPrice" placeholder="ex: 39.90" step="0.01" min="0">
+                        </label>
                     </div>
                     <textarea name="description" id="editDescription" placeholder="Description de l'espèce..." rows="4" required></textarea>
 
@@ -458,6 +564,11 @@
                         <label for="editProductFiles">Ajouter de nouvelles photos</label>
                         <input type="file" id="editProductFiles" multiple accept="image/*">
                     </div>
+                    <label class="switch-row">
+                        <input type="checkbox" name="hidden" id="editHidden">
+                        <span><strong>Article masqué sur la boutique</strong><br><small>Il reste dans l'inventaire mais n'apparaît plus aux clients et ne peut plus être commandé.</small></span>
+                    </label>
+
                     <button type="submit" id="btnSubmitEdit" class="btn-buy">METTRE À JOUR LE PRODUIT</button>
                     <p id="editUploadStatus" style="text-align: center; font-weight: 500;"></p>
                 </form>
@@ -523,6 +634,7 @@
                         <select id="editCatType" required>
                             <option value="animaux">Animaux</option>
                             <option value="materiels">Matériels & Accessoires</option>
+                            <option value="packs">Packs & Kits</option>
                         </select>
                         <input type="text" id="editCatLots" placeholder="Lots séparés par des virgules (ex: 1,5,10)" required>
                         <input type="number" id="editCatDefaultLot" placeholder="Lot affiché boutique (ex: 1)" required>
@@ -534,6 +646,8 @@
 
 </main>
 
-    <script type="module" src="admin.js?v=2"></script>
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <script type="module" src="admin.js?v=3"></script>
 </body>
 </html>
