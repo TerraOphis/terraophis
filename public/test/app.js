@@ -400,6 +400,7 @@ async function loadCatalogue() {
 
             const limit = parseInt(productGrid.dataset.limit);
             renderProducts(limit ? filtered.slice(0, limit) : filtered);
+            initTilt(productGrid);
         };
 
         searchInput?.addEventListener('input', filterAndSort);
@@ -452,7 +453,7 @@ async function loadProductDetails() {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists() && docSnap.data().hidden === true) {
-            detailsContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px;"><p style="font-family: \'Young Serif\', serif; font-size: 1.5rem;">Cet article n\'est plus disponible pour le moment 🌿</p><a href="boutique" class="btn-buy" style="display:inline-block; text-decoration:none; padding: 14px 30px; margin-top: 15px;">Découvrir la boutique</a></div>';
+            detailsContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px;"><p style="font-family: \'Fraunces\', serif; font-size: 1.5rem;">Cet article n\'est plus disponible pour le moment 🌿</p><a href="boutique" class="btn-buy" style="display:inline-block; text-decoration:none; padding: 14px 30px; margin-top: 15px;">Découvrir la boutique</a></div>';
         } else if (docSnap.exists()) {
             const product = docSnap.data();
             window.currentProductDetails = product; // NOUVEAU : Enregistrement global pour les calculs de changements d'options
@@ -603,7 +604,7 @@ async function loadProductDetails() {
                     </div>
                     
                     <div class="product-right">
-                        <h1 style="font-family: 'Young Serif', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
+                        <h1 style="font-family: 'Fraunces', serif; font-size: 2.5rem; margin: 0 0 5px 0;">${product.name}</h1>
                         <p class="product-latin" style="font-size: 1.1rem; font-style: italic; color: #777; margin-bottom: 20px;">${product.latinName && product.latinName !== "null" ? product.latinName : ""}</p>
                         <p class="product-price" style="font-size: 1.8rem; font-weight: 600; margin-bottom: 20px;">${oldPriceHtml}<span id="displayPrice">${Number(defaultPrice).toFixed(2)} €</span></p>
                         
@@ -1488,15 +1489,34 @@ function initCounters() {
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// Barre de progression de lecture : un petit cloporte avance avec le défilement
+// Effet 3D léger qui suit la souris sur les cartes
+function initTilt(root = document) {
+    if (reducedMotion || !window.matchMedia('(hover: hover)').matches) return;
+    root.querySelectorAll('.product-card, .feature-card, .card').forEach(card => {
+        if (card.dataset.tilt) return;
+        card.dataset.tilt = '1';
+        card.addEventListener('mousemove', (e) => {
+            const r = card.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width - 0.5;
+            const y = (e.clientY - r.top) / r.height - 0.5;
+            card.style.setProperty('--rx', `${(-y * 6).toFixed(2)}deg`);
+            card.style.setProperty('--ry', `${(x * 8).toFixed(2)}deg`);
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.removeProperty('--rx');
+            card.style.removeProperty('--ry');
+        });
+    });
+}
+
+// Barre de progression de lecture
 function initScrollProgress() {
     const bar = document.createElement('div');
     bar.className = 'scroll-progress';
-    bar.innerHTML = '<span class="scroll-progress-fill"></span><svg class="scroll-progress-bug" viewBox="0 0 40 24" aria-hidden="true"><ellipse cx="18" cy="12" rx="15" ry="8" fill="#6e665c"/><path d="M10 6q-2 6 0 12M16 4.5q-2 7.5 0 15M22 4.5q-2 7.5 0 15M28 6q-2 6 0 12" stroke="#f1eddc" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M33 9q4-4 6-3M33 15q4 4 6 3" stroke="#4a4239" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>';
     document.body.appendChild(bar);
     const update = () => {
         const max = document.documentElement.scrollHeight - window.innerHeight;
-        bar.style.setProperty('--p', max > 0 ? Math.min(window.scrollY / max, 1) : 0);
+        bar.style.transform = `scaleX(${max > 0 ? window.scrollY / max : 0})`;
     };
     window.addEventListener('scroll', update, { passive: true });
     update();
@@ -1536,6 +1556,7 @@ async function boot() {
     initFloatingCart();
     initScrollProgress();
     initIsopodWalker();
+    initTilt();
 
     if (!cached) await refreshContent();
     renderFaq();
